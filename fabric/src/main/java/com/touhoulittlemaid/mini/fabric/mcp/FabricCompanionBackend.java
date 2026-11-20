@@ -2,6 +2,8 @@ package com.touhoulittlemaid.mini.fabric.mcp;
 
 import com.touhoulittlemaid.mini.core.CompanionSnapshot;
 import com.touhoulittlemaid.mini.core.ContextQuery;
+import com.touhoulittlemaid.mini.core.InventoryRequest;
+import com.touhoulittlemaid.mini.core.InventoryTarget;
 import com.touhoulittlemaid.mini.core.LocalBehavior;
 import com.touhoulittlemaid.mini.core.ToolResult;
 import com.touhoulittlemaid.mini.fabric.config.CompanionConfigs;
@@ -583,26 +585,268 @@ public final class FabricCompanionBackend implements CompanionTools.CompanionBac
             "minecraft:wither_rose");
 
     @Override
-    public ToolResult inventory(UUID companionId, int slot) {
+    public ToolResult inventory(UUID companionId, InventoryRequest request) {
         return runOnServer(ignored -> withCompanion(companionId, companion -> {
-            if (slot < 0 || slot >= companion.backpack().getContainerSize()) {
-                return ToolResult.rejected("invalid_params", "slot out of range");
+            try {
+                return switch (request.action()) {
+                    case LIST -> ToolResult.ok("inventory", inventoryListJson(companion));
+                    case READ -> readItem(companion, request);
+                    case MOVE -> moveItem(companion, request, false);
+                    case EQUIP -> moveItem(companion, request, true);
+                    case DROP -> dropItem(companion, request);
+                };
+            } catch (IllegalArgumentException exception) {
+                return ToolResult.rejected("invalid_params", exception.getMessage());
             }
+        }));
+    }
+
+    private record SourceRef(net.minecraft.world.SimpleContainer container, int index,
+            ItemStack stack) {
+    }
+
+    private static ToolResult readItem(CompanionEntity companion, InventoryRequest request) {
+        if (request.hasItem()) {
+            SourceRef source = findSource(companion, request);
+            if (source == null) {
+                return ToolResult.rejected("missing_item",
+                        "No matching item in " + request.source().id());
+            }
+            return ToolResult.ok("read", itemResult(request.source(), source));
+        }
+        if (request.slot() < 0) {
+            return ToolResult.rejected("invalid_params", "read requires an item or a slot");
+        }
+        var container = containerFor(companion, request.source());
+        if (request.slot() >= container.getContainerSize()) {
+            return ToolResult.rejected("invalid_params", "slot out of range");
+        }
+        ItemStack stack = container.getItem(request.slot());
+        if (stack.isEmpty()) {
+            return ToolResult.ok("empty_slot", "slot " + request.slot() + " is empty");
+        }
+        return ToolResult.ok("read", itemResult(request.source(),
+                new SourceRef(container, request.slot(), stack)));
+    }
+
+    private static ToolResult moveItem(CompanionEntity companion, InventoryRequest request,
+            boolean equip) {
+        InventoryTarget destination = request.destination();
+        if (equip && !destination.isEquipment()) {
+            return ToolResult.rejected("invalid_params",
+                    "equip requires an equipment destination");
+        }
+        SourceRef source = findSource(companion, request);
+        if (source == null) {
+            return ToolResult.rejected("missing_item",
+                    "No matching item in " + request.source().id());
+        }
+
+        int amount = equip ? 1 : Math.min(request.count(), source.stack().getCount());
+        ItemStack moved = source.stack().copyWithCount(amount);
+
+        if (destination == InventoryTarget.INVENTORY) {
+            if (source.container() == companion.backpack()) {
+                return ToolResult.ok("no_change", "item is already in the backpack");
+            }
+            int space = backpackSpace(companion.backpack(), moved);
+            if (space < amount) {
+                CompanionRuntimeState.publish(companion.getUUID(), "inventory_full",
+                        "{\"action\":\"move\"}");
+                return ToolResult.rejected("inventory_full",
+                        "backpack has room for only " + space + " of " + amount);
+            }
+            removeFromSource(source, amount);
+            ItemStack leftover = moved.copy();
+            insertIntoBackpack(companion.backpack(), leftover);
+            companion.backpack().setChanged();
+        } else {
+            var equipment = companion.equipment();
+            int index = equipmentIndex(destination);
+            if (index < 0) {
+                return ToolResult.rejected("unsupported_target",
+                        "Unsupported equipment target: " + destination.id());
+            }
+            if (!equipment.getItem(index).isEmpty()) {
+                return ToolResult.rejected("busy",
+                        "destination slot is occupied: " + destination.id());
+            }
+            if (destination != InventoryTarget.MAIN_HAND
+                    && destination != InventoryTarget.OFF_HAND
+                    && !companion.isEquippableInSlot(moved, CompanionEntity.equipmentSlotAt(index))) {
+                return ToolResult.rejected("invalid_params",
+                        "item cannot be equipped in " + destination.id());
+            }
+            removeFromSource(source, amount);
+            equipment.setItem(index, moved);
+            companion.applyEquipment();
+        }
+
+        CompanionRuntimeState.publish(companion.getUUID(), "operation_completed",
+                "{\"action\":\"inventory\",\"change\":\"" + (equip ? "equip" : "move") + "\"}");
+        return ToolResult.ok(equip ? "equipped" : "moved",
+                new StringBuilder("{\"target\":\"").append(destination.id())
+                        .append("\",\"item\":\"").append(escape(itemId(moved)))
+                        .append("\",\"count\":").append(amount).append('}')
+                        .toString());
+    }
+
+    private static ToolResult dropItem(CompanionEntity companion, InventoryRequest request) {
+        SourceRef source = findSource(companion, request);
+        if (source == null) {
+            return ToolResult.rejected("missing_item",
+                    "No matching item in " + request.source().id());
+        }
+        int amount = Math.min(request.count(), source.stack().getCount());
+        ItemStack dropped = source.stack().copyWithCount(amount);
+        removeFromSource(source, amount);
+        if (companion.level() instanceof net.minecraft.server.level.ServerLevel serverLevel) {
+            companion.spawnAtLocation(serverLevel, dropped);
+        }
+        CompanionRuntimeState.publish(companion.getUUID(), "operation_completed",
+                "{\"action\":\"inventory\",\"change\":\"drop\"}");
+        return ToolResult.ok("dropped", "Dropped " + amount + " "
+                + itemId(dropped));
+    }
+
+    private static SourceRef findSource(CompanionEntity companion, InventoryRequest request) {
+        var container = containerFor(companion, request.source());
+        if (request.slot() >= 0) {
+            if (request.slot() >= container.getContainerSize()) {
+                return null;
+            }
+            ItemStack stack = container.getItem(request.slot());
+            return stack.isEmpty() ? null : new SourceRef(container, request.slot(), stack);
+        }
+        if (!request.hasItem()) {
+            return null;
+        }
+        for (int index = 0; index < container.getContainerSize(); index++) {
+            ItemStack stack = container.getItem(index);
+            if (!stack.isEmpty() && itemId(stack).equals(request.item())) {
+                return new SourceRef(container, index, stack);
+            }
+        }
+        return null;
+    }
+
+    private static void removeFromSource(SourceRef source, int amount) {
+        ItemStack stack = source.stack();
+        stack.shrink(amount);
+        source.container().setItem(source.index(),
+                stack.isEmpty() ? ItemStack.EMPTY : stack);
+    }
+
+    private static int backpackSpace(net.minecraft.world.SimpleContainer backpack,
+            ItemStack stack) {
+        int max = Math.min(stack.getMaxStackSize(), backpack.getMaxStackSize());
+        int space = 0;
+        for (int index = 0; index < backpack.getContainerSize(); index++) {
+            ItemStack existing = backpack.getItem(index);
+            if (existing.isEmpty()) {
+                space += max;
+            } else if (ItemStack.isSameItemSameComponents(existing, stack)) {
+                space += Math.max(0, max - existing.getCount());
+            }
+        }
+        return space;
+    }
+
+    private static void insertIntoBackpack(net.minecraft.world.SimpleContainer backpack,
+            ItemStack stack) {
+        int max = Math.min(stack.getMaxStackSize(), backpack.getMaxStackSize());
+        for (int index = 0; index < backpack.getContainerSize() && !stack.isEmpty(); index++) {
+            ItemStack existing = backpack.getItem(index);
+            if (existing.isEmpty() || !ItemStack.isSameItemSameComponents(existing, stack)) {
+                continue;
+            }
+            int moved = Math.min(max - existing.getCount(), stack.getCount());
+            if (moved > 0) {
+                existing.grow(moved);
+                stack.shrink(moved);
+                backpack.setChanged();
+            }
+        }
+        for (int index = 0; index < backpack.getContainerSize() && !stack.isEmpty(); index++) {
+            if (!backpack.getItem(index).isEmpty()) {
+                continue;
+            }
+            int moved = Math.min(max, stack.getCount());
+            backpack.setItem(index, stack.copyWithCount(moved));
+            stack.shrink(moved);
+        }
+    }
+
+    private static net.minecraft.world.SimpleContainer containerFor(CompanionEntity companion,
+            InventoryTarget target) {
+        return target == InventoryTarget.INVENTORY ? companion.backpack() : companion.equipment();
+    }
+
+    private static int equipmentIndex(InventoryTarget target) {
+        return switch (target) {
+            case MAIN_HAND -> 0;
+            case OFF_HAND -> 1;
+            case FEET -> 2;
+            case LEGS -> 3;
+            case CHEST -> 4;
+            case HEAD -> 5;
+            case INVENTORY -> -1;
+        };
+    }
+
+    private static String inventoryListJson(CompanionEntity companion) {
+        StringBuilder json = new StringBuilder("{\"action\":\"list\",\"backpack\":[");
+        boolean first = true;
+        for (int slot = 0; slot < companion.backpack().getContainerSize(); slot++) {
             ItemStack stack = companion.backpack().getItem(slot);
             if (stack.isEmpty()) {
-                return ToolResult.ok("empty_slot", "slot " + slot + " is empty");
+                continue;
             }
-            return ToolResult.ok("item", itemJson(stack));
-        }));
+            if (!first) {
+                json.append(',');
+            }
+            first = false;
+            appendInventoryEntry(json, slot, stack);
+        }
+        json.append("],\"equipment\":[");
+        first = true;
+        for (int slot = 0; slot < companion.equipment().getContainerSize(); slot++) {
+            ItemStack stack = companion.equipment().getItem(slot);
+            if (stack.isEmpty()) {
+                continue;
+            }
+            if (!first) {
+                json.append(',');
+            }
+            first = false;
+            json.append("{\"slot\":\"")
+                    .append(escape(CompanionEntity.equipmentSlotAt(slot).getName()))
+                    .append("\",\"item\":\"").append(escape(itemId(stack)))
+                    .append("\",\"count\":").append(stack.getCount()).append('}');
+        }
+        json.append("],\"free_backpack_slots\":")
+                .append(Math.max(0, com.touhoulittlemaid.mini.core.CompanionInventoryLayout
+                        .BACKPACK_SLOTS - companion.backpackUsedSlots()))
+                .append('}');
+        return json.toString();
+    }
+
+    private static void appendInventoryEntry(StringBuilder json, int slot, ItemStack stack) {
+        json.append("{\"slot\":").append(slot)
+                .append(",\"item\":\"").append(escape(itemId(stack)))
+                .append("\",\"count\":").append(stack.getCount()).append('}');
+    }
+
+    private static String itemResult(InventoryTarget target, SourceRef source) {
+        return new StringBuilder("{\"target\":\"").append(target.id())
+                .append("\",\"slot\":").append(source.index())
+                .append(",\"item\":\"").append(escape(itemId(source.stack())))
+                .append("\",\"count\":").append(source.stack().getCount()).append('}')
+                .toString();
     }
 
     private static String itemId(ItemStack stack) {
         return stack.getItem().builtInRegistryHolder().key().identifier().toString();
-    }
-
-    private static String itemJson(ItemStack stack) {
-        return "{\"item\":\"" + itemId(stack)
-                + "\",\"count\":" + stack.getCount() + '}';
     }
 
     @Override

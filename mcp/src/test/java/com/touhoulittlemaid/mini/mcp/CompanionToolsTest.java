@@ -30,6 +30,7 @@ class CompanionToolsTest {
         private UUID lastStop;
         private String said;
         private com.touhoulittlemaid.mini.core.ContextQuery lastContext;
+        private com.touhoulittlemaid.mini.core.InventoryRequest lastInventory;
 
         @Override
         public List<CompanionSnapshot> listCompanions() {
@@ -65,8 +66,10 @@ class CompanionToolsTest {
         }
 
         @Override
-        public ToolResult inventory(UUID companionId, int slot) {
-            return ToolResult.ok("slot", "empty");
+        public ToolResult inventory(UUID companionId,
+                com.touhoulittlemaid.mini.core.InventoryRequest request) {
+            lastInventory = request;
+            return ToolResult.ok("inventory", "{\"action\":\"" + request.action().id() + "\"}");
         }
 
         @Override
@@ -127,7 +130,8 @@ class CompanionToolsTest {
         ToolRegistry registry = registry(new RecordingBackend());
         assertTrue(registry.spec("companion_list").orElseThrow().readOnly());
         assertTrue(registry.spec("companion_state").orElseThrow().readOnly());
-        assertTrue(registry.spec("companion_inventory").orElseThrow().readOnly());
+        assertFalse(registry.spec("companion_inventory").orElseThrow().readOnly());
+        assertTrue(registry.spec("companion_inventory").orElseThrow().destructive());
         assertTrue(registry.spec("companion_stop").orElseThrow().destructive());
         assertFalse(registry.spec("companion_move").orElseThrow().readOnly());
     }
@@ -277,6 +281,80 @@ class CompanionToolsTest {
                 "tags", List.of(1, 2)));
         assertEquals(ToolResult.Status.REJECTED, result.status());
         assertEquals("invalid_params", result.code());
+    }
+
+    @Test
+    void inventoryActionReachesTheBodyWithTypedFields() {
+        RecordingBackend backend = new RecordingBackend();
+        ToolResult result = registry(backend).invoke("companion_inventory", Map.of(
+                "companion_id", COMPANION.toString(),
+                "action", "MOVE",
+                "item", "Minecraft:Wheat_Seeds",
+                "count", 8,
+                "source", "inventory",
+                "destination", "main_hand"));
+
+        assertEquals(ToolResult.Status.OK, result.status());
+        var request = backend.lastInventory;
+        assertEquals(com.touhoulittlemaid.mini.core.InventoryAction.MOVE, request.action());
+        assertEquals("minecraft:wheat_seeds", request.item());
+        assertEquals(8, request.count());
+        assertEquals(com.touhoulittlemaid.mini.core.InventoryTarget.INVENTORY,
+                request.source());
+        assertEquals(com.touhoulittlemaid.mini.core.InventoryTarget.MAIN_HAND,
+                request.destination());
+    }
+
+    @Test
+    void equipDefaultsToMainHandAndRejectsInventoryDestination() {
+        RecordingBackend backend = new RecordingBackend();
+        ToolRegistry registry = registry(backend);
+        registry.invoke("companion_inventory", Map.of(
+                "companion_id", COMPANION.toString(),
+                "action", "equip",
+                "item", "minecraft:diamond_helmet",
+                "destination", "head"));
+        assertEquals(com.touhoulittlemaid.mini.core.InventoryTarget.HEAD,
+                backend.lastInventory.destination());
+
+        registry.invoke("companion_inventory", Map.of(
+                "companion_id", COMPANION.toString(),
+                "action", "equip",
+                "item", "minecraft:iron_sword"));
+        assertEquals(com.touhoulittlemaid.mini.core.InventoryTarget.MAIN_HAND,
+                backend.lastInventory.destination());
+
+        ToolResult invalid = registry.invoke("companion_inventory", Map.of(
+                "companion_id", COMPANION.toString(),
+                "action", "equip",
+                "item", "minecraft:diamond_helmet",
+                "destination", "inventory"));
+        assertEquals(ToolResult.Status.REJECTED, invalid.status());
+        assertEquals("invalid_params", invalid.code());
+    }
+
+    @Test
+    void inventoryRejectsUnknownActionAndReadWithoutSelector() {
+        ToolRegistry registry = registry(new RecordingBackend());
+        ToolResult badAction = registry.invoke("companion_inventory", Map.of(
+                "companion_id", COMPANION.toString(),
+                "action", "farm"));
+        assertEquals(ToolResult.Status.REJECTED, badAction.status());
+
+        ToolResult badRead = registry.invoke("companion_inventory", Map.of(
+                "companion_id", COMPANION.toString(),
+                "action", "read"));
+        assertEquals(ToolResult.Status.REJECTED, badRead.status());
+        assertEquals("invalid_params", badRead.code());
+    }
+
+    @Test
+    void listIsTheDefaultAction() {
+        RecordingBackend backend = new RecordingBackend();
+        registry(backend).invoke("companion_inventory", Map.of(
+                "companion_id", COMPANION.toString()));
+        assertEquals(com.touhoulittlemaid.mini.core.InventoryAction.LIST,
+                backend.lastInventory.action());
     }
 
     @Test

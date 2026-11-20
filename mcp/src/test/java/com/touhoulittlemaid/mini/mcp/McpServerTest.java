@@ -300,8 +300,10 @@ class McpServerTest {
         }
 
         @Override
-        public ToolResult inventory(UUID companionId, int slot) {
-            return ToolResult.ok("slot", "empty");
+        public ToolResult inventory(UUID companionId,
+                com.touhoulittlemaid.mini.core.InventoryRequest request) {
+            return ToolResult.ok("inventory",
+                    "{\"action\":\"" + request.action().id() + "\"}");
         }
 
         @Override

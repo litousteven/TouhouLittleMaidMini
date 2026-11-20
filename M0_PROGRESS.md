@@ -214,7 +214,7 @@ $env:PATH="$env:JAVA_HOME\bin;$env:PATH"
 尚未完成（M2 收尾，进入 M3）：
 
 - `companion_context` 的完整实现已移入 M3（分类、标签与实体过滤已完成）。
-- `companion_inventory` 只读单槽，尚未支持 `action` 与装备槽。
+- `companion_inventory` 的 `action` 与装备槽已在 M3 实现。
 - 事件长轮询是即时返回，尚未真正挂起等待 `timeout_seconds`。
 - `companion_interact` 目前只处理成熟 `CropBlock` 收获；其他方块交互返回
   `unsupported_interaction`。
@@ -239,11 +239,14 @@ M2 结论：**Go**。协议、认证、作用域、审计、幂等、事件、�
   `max_results`；未加载区块以 `unloaded`/`partial` 明确报告。
 - Fabric 后端实现 `self`、`owner`、`inventory`、`blocks`、`entities`、`containers`、
   `hazards`；容器只列位置，不读取内容。
-- 测试：core 新增 6 个上下文模型测试；mcp 新增数组校验与 schema 测试；
-  `:fabric:runGameTestServer` → `All 30 required tests passed`。
+- `companion_inventory` 实现 `list/read/move/equip/drop`，支持背包、双手与四个护甲槽；
+  不会凭空生成物品，`missing_item`、`inventory_full`、`busy` 均为显式结果。
+- `companion_inventory` 映射到 `INVENTORY` 动作族，只读 Token 不能再调用写动作；
+  `companion_context category=inventory` 仍可用于只读观察。
+- 测试：core 新增上下文与背包请求模型测试；mcp 新增数组校验与 schema 测试；
+  `:fabric:runGameTestServer` → `All 34 required tests passed`。
 
-尚未完成：`companion_inventory` 写动作、移动/交互扩展、长轮询、按同伴 Token 与
-游戏内授权、断线降级、日程与 Skill。
+尚未完成：移动/交互扩展、长轮询、按同伴 Token 与游戏内授权、断线降级、日程与 Skill。
 
 ## 恢复工作
 

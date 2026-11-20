@@ -31,7 +31,8 @@ public record TokenScope(Set<ActionKind> allowedActions, boolean canInteractWith
     public static ActionKind actionOf(String toolName) {
         return switch (toolName) {
             case "companion_list", "companion_state", "companion_context",
-                    "companion_inventory", "companion_wait_events" -> ActionKind.OBSERVE;
+                    "companion_wait_events" -> ActionKind.OBSERVE;
+            case "companion_inventory" -> ActionKind.INVENTORY;
             case "companion_move", "companion_set_behavior" -> ActionKind.MOVE;
             case "companion_interact" -> ActionKind.INTERACT;
             case "companion_say" -> ActionKind.WAIT;

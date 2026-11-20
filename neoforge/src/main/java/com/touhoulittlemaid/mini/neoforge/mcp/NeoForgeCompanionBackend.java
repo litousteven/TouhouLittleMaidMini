@@ -47,7 +47,8 @@ public final class NeoForgeCompanionBackend implements CompanionTools.CompanionB
     }
 
     @Override
-    public ToolResult inventory(UUID companionId, int slot) {
+    public ToolResult inventory(UUID companionId,
+            com.touhoulittlemaid.mini.core.InventoryRequest request) {
         return unavailable();
     }
 

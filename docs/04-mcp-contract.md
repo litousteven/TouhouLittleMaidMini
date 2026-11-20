@@ -285,9 +285,14 @@ Token scope 之外的同伴不出现在结果中。
   "item": "minecraft:wheat_seeds",
   "count": 8,
   "source": "inventory",
-  "destination": "main_hand"
+  "destination": "main_hand",
+  "slot": 3
 }
 ```
+
+`action` 省略时为 `list`；只提供 `slot` 时按旧行为读取该背包槽。`slot` 省略时按
+`item` 在 `source` 中查找第一个匹配项。`equip` 的 `destination` 必须是装备槽，
+默认 `main_hand`。
 
 `action`：
 

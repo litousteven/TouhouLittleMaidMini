@@ -83,7 +83,7 @@ class TokenScopeAndAuditTest {
     void scopeMapsEveryToolToOneActionFamily() {
         assertEquals(ActionKind.OBSERVE, TokenScope.actionOf("companion_list"));
         assertEquals(ActionKind.OBSERVE, TokenScope.actionOf("companion_state"));
-        assertEquals(ActionKind.OBSERVE, TokenScope.actionOf("companion_inventory"));
+        assertEquals(ActionKind.INVENTORY, TokenScope.actionOf("companion_inventory"));
         assertEquals(ActionKind.OBSERVE, TokenScope.actionOf("companion_wait_events"));
         assertEquals(ActionKind.MOVE, TokenScope.actionOf("companion_move"));
         assertEquals(ActionKind.INTERACT, TokenScope.actionOf("companion_interact"));
@@ -174,8 +174,9 @@ class TokenScopeAndAuditTest {
         }
 
         @Override
-        public com.touhoulittlemaid.mini.core.ToolResult inventory(java.util.UUID id, int slot) {
-            return com.touhoulittlemaid.mini.core.ToolResult.ok("slot", "empty");
+        public com.touhoulittlemaid.mini.core.ToolResult inventory(java.util.UUID id,
+                com.touhoulittlemaid.mini.core.InventoryRequest request) {
+            return com.touhoulittlemaid.mini.core.ToolResult.ok("inventory", "{}");
         }
 
         @Override

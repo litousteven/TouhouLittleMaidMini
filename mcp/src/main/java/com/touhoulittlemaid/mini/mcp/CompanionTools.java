@@ -4,6 +4,9 @@ import com.touhoulittlemaid.mini.core.ActionKind;
 import com.touhoulittlemaid.mini.core.CompanionSnapshot;
 import com.touhoulittlemaid.mini.core.ContextCategory;
 import com.touhoulittlemaid.mini.core.ContextQuery;
+import com.touhoulittlemaid.mini.core.InventoryAction;
+import com.touhoulittlemaid.mini.core.InventoryRequest;
+import com.touhoulittlemaid.mini.core.InventoryTarget;
 import com.touhoulittlemaid.mini.core.LocalBehavior;
 import com.touhoulittlemaid.mini.core.ToolResult;
 import com.touhoulittlemaid.mini.core.ToolSpec;
@@ -54,8 +57,8 @@ public final class CompanionTools {
         /** Bounded observation of one context category. */
         ToolResult context(UUID companionId, ContextQuery query);
 
-        /** Read one inventory slot. */
-        ToolResult inventory(UUID companionId, int slot);
+        /** Read or change the companion inventory. */
+        ToolResult inventory(UUID companionId, InventoryRequest request);
 
         /** Change the local behaviour. */
         ToolResult setBehavior(UUID companionId, LocalBehavior behavior);
@@ -205,18 +208,66 @@ public final class CompanionTools {
 
         registry.register(new ToolSpec(
                         "companion_inventory",
-                        "Read an inventory slot",
-                        "Reads one backpack slot of a companion.",
+                        "Inspect and change the inventory",
+                        "Lists, reads, moves, equips or drops items that already exist in "
+                                + "the companion's backpack and equipment slots.",
                         ordered(
                                 "companion_id", ToolParameter.requiredString("Companion UUID"),
-                                "slot", ToolParameter.requiredInteger("Backpack slot index")),
-                        true, false, true),
+                                "action", ToolParameter.optionalString(
+                                        "list, read, move, equip or drop"),
+                                "item", ToolParameter.optionalString("Exact item ID"),
+                                "count", ToolParameter.optionalIntegerWithMinimum(
+                                        "Item count", 1.0D),
+                                "source", ToolParameter.optionalString(
+                                        "inventory, main_hand, off_hand, head, chest, legs or feet"),
+                                "destination", ToolParameter.optionalString(
+                                        "inventory, main_hand, off_hand, head, chest, legs or feet"),
+                                "slot", ToolParameter.optionalIntegerWithMinimum(
+                                        "Backpack slot index", 0.0D)),
+                        false, true, false),
                 arguments -> {
                     Optional<UUID> id = companionId(arguments);
                     if (id.isEmpty()) {
                         return ToolResult.rejected("invalid_params", "companion_id must be a UUID");
                     }
-                    return backend.inventory(id.get(), intValue(arguments, "slot"));
+                    InventoryAction action;
+                    InventoryTarget source;
+                    InventoryTarget destination;
+                    try {
+                        action = InventoryAction.fromId(stringValue(arguments, "action",
+                                arguments.containsKey("slot")
+                                        ? InventoryAction.READ.id()
+                                        : InventoryAction.LIST.id()));
+                        source = InventoryTarget.fromId(
+                                stringValue(arguments, "source", InventoryTarget.INVENTORY.id()));
+                        destination = InventoryTarget.fromId(stringValue(arguments, "destination",
+                                action == InventoryAction.EQUIP
+                                        ? InventoryTarget.MAIN_HAND.id()
+                                        : InventoryTarget.INVENTORY.id()));
+                    } catch (IllegalArgumentException exception) {
+                        return ToolResult.rejected("invalid_params", exception.getMessage());
+                    }
+                    int count = arguments.containsKey("count")
+                            ? intValue(arguments, "count") : 1;
+                    int slot = arguments.containsKey("slot")
+                            ? intValue(arguments, "slot") : -1;
+                    String item = stringValue(arguments, "item", "");
+                    if (action == InventoryAction.EQUIP && !destination.isEquipment()) {
+                        return ToolResult.rejected("invalid_params",
+                                "equip requires an equipment destination");
+                    }
+                    if (action == InventoryAction.READ && item.isBlank() && slot < 0) {
+                        return ToolResult.rejected("invalid_params",
+                                "read requires an item or a slot");
+                    }
+                    if ((action == InventoryAction.MOVE || action == InventoryAction.EQUIP
+                            || action == InventoryAction.DROP)
+                            && item.isBlank() && slot < 0) {
+                        return ToolResult.rejected("invalid_params",
+                                "this action requires an item or a slot");
+                    }
+                    return backend.inventory(id.get(), new InventoryRequest(action, item, count,
+                            source, destination, slot));
                 });
 
         registry.register(new ToolSpec(
