@@ -43,6 +43,8 @@ public final class TlmmFabric implements ModInitializer {
     public void onInitialize() {
         FabricContent.register();
         CompanionCommands.register();
+        net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents.END_SERVER_TICK.register(
+                com.touhoulittlemaid.mini.fabric.runtime.AgentWatchdog::tick);
         ServerLifecycleEvents.SERVER_STARTED.register(server -> {
             int saveVersion = M0SavedData.get(server).value();
             LOGGER.info("[m0] saved-data baseline value={}", saveVersion);

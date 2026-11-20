@@ -61,6 +61,50 @@ public final class M3MoveInteractGameTests {
         helper.succeed();
     }
 
+    @GameTest(maxTicks = 120)
+    public void sameActionsHarvestWheatAndCarrots(GameTestHelper helper) {
+        CompanionEntity companion = helper.spawn(FabricContent.COMPANION, 2, 2, 2);
+        BlockPos wheatSoil = helper.absolutePos(new BlockPos(3, 1, 2));
+        BlockPos wheat = wheatSoil.above();
+        BlockPos carrotSoil = helper.absolutePos(new BlockPos(5, 1, 2));
+        BlockPos carrot = carrotSoil.above();
+        helper.setBlock(3, 1, 2, Blocks.FARMLAND);
+        helper.setBlock(5, 1, 2, Blocks.FARMLAND);
+        helper.setBlock(3, 2, 2, Blocks.WHEAT.defaultBlockState().setValue(CropBlock.AGE, 7));
+        helper.setBlock(5, 2, 2, Blocks.CARROTS.defaultBlockState().setValue(CropBlock.AGE, 7));
+        ToolRegistry registry = registry(helper);
+        String id = companion.getUUID().toString();
+
+        companion.setItemSlot(EquipmentSlot.MAINHAND, new ItemStack(Items.WHEAT_SEEDS, 1));
+        if (!"harvested".equals(registry.invoke("companion_interact", Map.of(
+                "companion_id", id, "x", wheat.getX(), "y", wheat.getY(),
+                "z", wheat.getZ())).code())) {
+            throw helper.assertionException("wheat harvest failed");
+        }
+        if (!"planted".equals(registry.invoke("companion_interact", Map.of(
+                "companion_id", id, "x", wheat.getX(), "y", wheat.getY(),
+                "z", wheat.getZ())).code())) {
+            throw helper.assertionException("wheat replant failed");
+        }
+
+        companion.setItemSlot(EquipmentSlot.MAINHAND, new ItemStack(Items.CARROT, 1));
+        if (!"harvested".equals(registry.invoke("companion_interact", Map.of(
+                "companion_id", id, "x", carrot.getX(), "y", carrot.getY(),
+                "z", carrot.getZ())).code())) {
+            throw helper.assertionException("carrot harvest failed");
+        }
+        if (!"planted".equals(registry.invoke("companion_interact", Map.of(
+                "companion_id", id, "x", carrot.getX(), "y", carrot.getY(),
+                "z", carrot.getZ())).code())) {
+            throw helper.assertionException("carrot replant failed");
+        }
+        if (!(helper.getLevel().getBlockState(wheat).getBlock() instanceof CropBlock)
+                || !(helper.getLevel().getBlockState(carrot).getBlock() instanceof CropBlock)) {
+            throw helper.assertionException("both crops should be replanted");
+        }
+        helper.succeed();
+    }
+
     @GameTest(maxTicks = 100)
     public void interactingWithAirWithoutSeedsIsExplicit(GameTestHelper helper) {
         CompanionEntity companion = helper.spawn(FabricContent.COMPANION, 2, 2, 2);

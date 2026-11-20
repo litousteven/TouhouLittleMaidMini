@@ -146,6 +146,13 @@ public record CompanionServerConfig(
                 eventRetentionDays, eventMaxFileMb);
     }
 
+    public CompanionServerConfig withDisconnectGraceSeconds(int graceSeconds) {
+        return new CompanionServerConfig(mcpEnabled, mcpHost, mcpPort, maxCompanions,
+                maxActionRadius, defaultWorkRadius, graceSeconds,
+                continueOperationAfterDisconnect, safeModeAfterDisconnect, hungerDecaySeconds,
+                lowHealthPercent, eventRetentionDays, eventMaxFileMb);
+    }
+
     public int clampedRadius(int requested) {
         return Math.max(1, Math.min(requested, maxActionRadius));
     }

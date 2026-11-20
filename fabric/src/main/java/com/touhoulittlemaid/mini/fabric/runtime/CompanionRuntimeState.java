@@ -12,6 +12,8 @@ public final class CompanionRuntimeState {
 
     private static volatile EventBus eventBus = new EventBus();
     private static volatile boolean mcpConnected;
+    private static final com.touhoulittlemaid.mini.mcp.AgentPresence PRESENCE =
+            new com.touhoulittlemaid.mini.mcp.AgentPresence();
 
     private CompanionRuntimeState() {
     }
@@ -23,6 +25,11 @@ public final class CompanionRuntimeState {
     /** Called once when a server starts so the endpoint and entities share one log. */
     public static void install(EventBus bus) {
         eventBus = java.util.Objects.requireNonNull(bus, "bus");
+        PRESENCE.clear();
+    }
+
+    public static com.touhoulittlemaid.mini.mcp.AgentPresence presence() {
+        return PRESENCE;
     }
 
     public static void publish(UUID companionId, String kind, String data) {

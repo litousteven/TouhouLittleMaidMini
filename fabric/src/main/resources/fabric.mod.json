@@ -18,7 +18,8 @@
       "com.touhoulittlemaid.mini.fabric.gametest.M2ToolPipelineGameTests",
       "com.touhoulittlemaid.mini.fabric.gametest.M3ContextGameTests",
       "com.touhoulittlemaid.mini.fabric.gametest.M3InventoryGameTests",
-      "com.touhoulittlemaid.mini.fabric.gametest.M3MoveInteractGameTests"
+      "com.touhoulittlemaid.mini.fabric.gametest.M3MoveInteractGameTests",
+      "com.touhoulittlemaid.mini.fabric.gametest.M3DisconnectGameTests"
     ],
     "fabric-client-gametest": [
       "com.touhoulittlemaid.mini.fabric.gametest.CompanionClientGameTests"

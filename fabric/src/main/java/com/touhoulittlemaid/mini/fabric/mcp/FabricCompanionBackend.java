@@ -74,6 +74,7 @@ public final class FabricCompanionBackend implements CompanionTools.CompanionBac
     @Override
     public ToolResult move(UUID companionId, MoveRequest request) {
         return runOnServer(ignored -> withCompanion(companionId, companion -> {
+            CompanionRuntimeState.presence().recordWrite(companionId);
             if (companion.isSafetyStopped()) {
                 return ToolResult.rejected("unsafe_area",
                         "companion health is too low to accept body actions");
@@ -135,6 +136,7 @@ public final class FabricCompanionBackend implements CompanionTools.CompanionBac
     @Override
     public ToolResult interact(UUID companionId, InteractRequest request) {
         return runOnServer(ignored -> withCompanion(companionId, companion -> {
+            CompanionRuntimeState.presence().recordWrite(companionId);
             if (companion.isSafetyStopped()) {
                 return ToolResult.rejected("unsafe_area",
                         "companion health is too low to accept body actions");
@@ -681,6 +683,9 @@ public final class FabricCompanionBackend implements CompanionTools.CompanionBac
     @Override
     public ToolResult inventory(UUID companionId, InventoryRequest request) {
         return runOnServer(ignored -> withCompanion(companionId, companion -> {
+            if (request.action() != com.touhoulittlemaid.mini.core.InventoryAction.LIST) {
+                CompanionRuntimeState.presence().recordWrite(companionId);
+            }
             try {
                 return switch (request.action()) {
                     case LIST -> ToolResult.ok("inventory", inventoryListJson(companion));
@@ -962,6 +967,7 @@ public final class FabricCompanionBackend implements CompanionTools.CompanionBac
     @Override
     public ToolResult setBehavior(UUID companionId, LocalBehavior behavior) {
         return runOnServer(ignored -> withCompanion(companionId, companion -> {
+            CompanionRuntimeState.presence().recordWrite(companionId);
             LocalBehavior previous = companion.behavior();
             companion.setBehavior(behavior);
             if (previous != behavior) {
@@ -982,6 +988,7 @@ public final class FabricCompanionBackend implements CompanionTools.CompanionBac
             return ToolResult.rejected("unknown_companion",
                     "No such companion: " + companionId);
         }
+        CompanionRuntimeState.presence().recordRead(companionId);
         if (events.cursorExpired(afterSequence)) {
             return ToolResult.rejected("event_cursor_expired",
                     "Cursor is older than the retained window; call companion_state first");
@@ -1028,6 +1035,7 @@ public final class FabricCompanionBackend implements CompanionTools.CompanionBac
     @Override
     public ToolResult stop(UUID companionId) {
         return runOnServer(ignored -> withCompanion(companionId, companion -> {
+            CompanionRuntimeState.presence().recordStop(companionId);
             companion.getNavigation().stop();
             events.publish(companionId.toString(), "operation_stopped",
                     "{\"reason\":\"agent_requested\"}");
@@ -1052,6 +1060,7 @@ public final class FabricCompanionBackend implements CompanionTools.CompanionBac
         if (companion == null) {
             return ToolResult.rejected("unknown_companion", "No such companion: " + companionId);
         }
+        CompanionRuntimeState.presence().recordRead(companionId);
         return action.apply(companion);
     }
 

@@ -258,9 +258,15 @@ M2 结论：**Go**。协议、认证、作用域、审计、幂等、事件、�
   有效期内持续生效。
 - 测试：core 新增上下文、背包、移动/交互请求模型测试；mcp 新增数组校验、schema、
   长轮询、滚动日志、权限票据与 Token 作用域测试；`:fabric:runGameTestServer` →
-  `All 38 required tests passed`。
+  `All 40 required tests passed`。
+- 断线宽限期由 `AgentPresence` + `AgentWatchdog` 实现：超过 `disconnect_grace_seconds`
+  后停止导航并切到配置的安全模式；`continue_operation_after_disconnect` 可保留操作。
+- Skill 示例：`skills/core/harvest_crops`、`organize_inventory` 可执行；
+  `collect_items`、`fishing` 明确标注当前交互缺口，不伪造完成。
+- 小麦与胡萝卜使用同一套动作完成收获与补种，由 GameTest 覆盖。
 
-尚未完成：断线降级、日程与 Skill。
+尚未完成：实体/空气交互、他人容器内容、日程判定、Token 持久化、真实 CLI Skill E2E。
+详见 [`docs/validation/M3.md`](docs/validation/M3.md)。
 
 ## 恢复工作
 
@@ -281,6 +287,8 @@ git log -3 --oneline --decorate
 ```
 
 本机开发客户端必须带 `-Ptlmm.graphicsBackend=vulkan`；不加会以 `0xC0000005` 崩溃。
+即使带 Vulkan 仍崩溃时，先删除 `run/clientGametest/options.txt` 和截图缓存；陈旧
+选项会导致同样的原生访问冲突。
 
 下一步是 M3：先做 `companion_context` 标签/实体过滤、`companion_inventory` 写动作
 与装备槽、移动/交互扩展，再做长轮询、按同伴 Token 与游戏内授权、断线降级、日程与

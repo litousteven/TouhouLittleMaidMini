@@ -15,5 +15,8 @@
   "gui.tlmm.companion.stats_health": "Health %s/%s   Hunger %s",
   "gui.tlmm.companion.stats_other": "Radius %s   Bag %s/9   Eq %s",
   "gui.tlmm.mcp_on": "MCP on",
-  "gui.tlmm.mcp_off": "MCP off"
+  "gui.tlmm.mcp_off": "MCP off",
+  "chat.tlmm.permission.request": "%s asks to %s",
+  "chat.tlmm.permission.allow": "Allow",
+  "chat.tlmm.permission.deny": "Deny"
 }
