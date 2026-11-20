@@ -1,9 +1,11 @@
 package com.touhoulittlemaid.mini.neoforge;
 
 import com.touhoulittlemaid.mini.core.PlatformState;
+import com.touhoulittlemaid.mini.mcp.CompanionTools;
 import com.touhoulittlemaid.mini.mcp.McpServer;
 import com.touhoulittlemaid.mini.mcp.McpServerConfig;
 import com.touhoulittlemaid.mini.neoforge.content.TlmmContent;
+import com.touhoulittlemaid.mini.neoforge.mcp.NeoForgeCompanionBackend;
 import com.touhoulittlemaid.mini.neoforge.persistence.M0SavedData;
 
 import java.util.concurrent.atomic.AtomicReference;
@@ -69,7 +71,7 @@ public final class Tlmm {
         int port = Integer.getInteger("tlmm.mcp.port", 8765);
         McpServer candidate = new McpServer(
                 new McpServerConfig(McpServerConfig.LOOPBACK, port, token),
-                state::get);
+                CompanionTools.registry(new NeoForgeCompanionBackend()));
         try {
             candidate.start();
             mcpServer = candidate;

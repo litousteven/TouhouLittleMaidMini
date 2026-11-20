@@ -172,6 +172,42 @@ $env:PATH="$env:JAVA_HOME\bin;$env:PATH"
 - 服务端配置与服务端/客户端同步。
 - `docs/validation/M1.md` 与 M1 完成提交。
 
+## M2 进度（进行中）
+
+已完成并验证：
+
+- `core` 新增 `ActionKind`（move/observe/interact/inventory/wait/stop）、`ToolSpec`、
+  `ToolResult`（明确区分 ok / rejected / timeout / interrupted / unknown_tool）。
+- `mcp` 新增 `ToolRegistry`（注册、参数类型校验、数值下限、未知参数拒绝、异常结构化）
+  与 `CompanionTools`（8 个工具，低于 10 上限）。
+- `McpServer` 改为由注册表驱动，并生成真实 JSON Schema 与 annotations。
+- 修复 Gson 数字解码：原先把 JSON 整数解成 `LazilyParsedNumber`，导致合法的
+  整数参数被误判为类型错误；现在规范化为 `Long`/`Double`。
+- 修复未知同伴：原先落入 `internal_error`，现在是明确的 `unknown_companion`。
+- `fabric` 新增 `FabricCompanionBackend`：所有世界操作提交到服务器主线程并等待结果，
+  HTTP 线程不直接修改世界。
+- `neoforge` 跟随接口变化同步：`NeoForgeCompanionBackend` 明确返回
+  `unsupported_loader`，不伪造成功。
+
+验证：
+
+- `:core:test :mcp:test` 共 32 个测试通过（9 core + 23 mcp）。
+- `:fabric:runGameTestServer` → `All 15 required tests passed`。
+- 真实专用服 MCP E2E：`initialize`、`tools/list`（8 个工具、注解正确）、
+  `companion_list`、`unknown_companion`、`invalid_params`、数值下限。
+- 全仓 `.\gradlew.bat build` 通过。
+
+尚未完成：
+
+- `companion_context`（按标签/半径查询附近方块与实体）。
+- 事件长轮询与事件游标。
+- 请求 ID 幂等。
+- Token 作用域、撤销与过期。
+- 审计日志。
+- 客户端 MCP 连接状态显示。
+- `.codex/config.toml` 连接示例与 Token 生成流程。
+- `docs/validation/M2.md` 与 M2 完成提交。
+
 ## 恢复工作
 
 重启后先读取本文件。Windows 下从仓库根目录执行：

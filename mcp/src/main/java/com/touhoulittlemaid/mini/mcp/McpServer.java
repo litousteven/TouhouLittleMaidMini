@@ -9,18 +9,20 @@ import com.google.gson.JsonParseException;
 import com.google.gson.JsonParser;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
-import com.touhoulittlemaid.mini.core.PlatformState;
+import com.touhoulittlemaid.mini.core.ToolResult;
+import com.touhoulittlemaid.mini.core.ToolSpec;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.function.Supplier;
 
 /**
  * Minimal MCP 2025-11-25 Streamable HTTP endpoint used by the M0 probe.
@@ -35,16 +37,16 @@ public final class McpServer implements AutoCloseable {
     private static final int MAX_BODY_BYTES = 64 * 1024;
 
     private final McpServerConfig config;
-    private final Supplier<PlatformState> stateSupplier;
+    private final ToolRegistry tools;
     private final Gson gson;
     private final byte[] tokenDigest;
 
     private HttpServer server;
     private ExecutorService executor;
 
-    public McpServer(McpServerConfig config, Supplier<PlatformState> stateSupplier) {
+    public McpServer(McpServerConfig config, ToolRegistry tools) {
         this.config = Objects.requireNonNull(config, "config");
-        this.stateSupplier = Objects.requireNonNull(stateSupplier, "stateSupplier");
+        this.tools = Objects.requireNonNull(tools, "tools");
         this.gson = new Gson();
         this.tokenDigest = sha256(config.bearerToken());
     }
@@ -182,32 +184,51 @@ public final class McpServer implements AutoCloseable {
     }
 
     private JsonObject toolsListResult() {
-        JsonArray tools = new JsonArray();
-        tools.add(tool("ping", "Ping the M0 endpoint", "Returns a fixed pong response."));
-        tools.add(tool("state", "Read M0 platform state",
-                "Returns the mod and Minecraft versions plus server readiness."));
+        JsonArray list = new JsonArray();
+        for (ToolSpec spec : tools.tools()) {
+            list.add(toolJson(spec));
+        }
 
         JsonObject result = new JsonObject();
-        result.add("tools", tools);
+        result.add("tools", list);
         return result;
     }
 
-    private JsonObject tool(String name, String title, String description) {
+    private JsonObject toolJson(ToolSpec spec) {
+        JsonObject properties = new JsonObject();
+        JsonArray required = new JsonArray();
+        for (Map.Entry<String, ToolSpec.ToolParameter> entry : spec.parameters().entrySet()) {
+            ToolSpec.ToolParameter parameter = entry.getValue();
+            JsonObject property = new JsonObject();
+            property.addProperty("type", parameter.type().jsonName());
+            property.addProperty("description", parameter.description());
+            if (parameter.numericMinimum() != null) {
+                property.addProperty("minimum", parameter.numericMinimum());
+            }
+            properties.add(entry.getKey(), property);
+            if (parameter.required()) {
+                required.add(entry.getKey());
+            }
+        }
+
         JsonObject schema = new JsonObject();
         schema.addProperty("type", "object");
-        schema.add("properties", new JsonObject());
+        schema.add("properties", properties);
+        if (!required.isEmpty()) {
+            schema.add("required", required);
+        }
         schema.addProperty("additionalProperties", false);
 
         JsonObject annotations = new JsonObject();
-        annotations.addProperty("readOnlyHint", true);
-        annotations.addProperty("destructiveHint", false);
-        annotations.addProperty("idempotentHint", true);
+        annotations.addProperty("readOnlyHint", spec.readOnly());
+        annotations.addProperty("destructiveHint", spec.destructive());
+        annotations.addProperty("idempotentHint", spec.idempotent());
         annotations.addProperty("openWorldHint", false);
 
         JsonObject tool = new JsonObject();
-        tool.addProperty("name", name);
-        tool.addProperty("title", title);
-        tool.addProperty("description", description);
+        tool.addProperty("name", spec.name());
+        tool.addProperty("title", spec.title());
+        tool.addProperty("description", spec.description());
         tool.add("inputSchema", schema);
         tool.add("annotations", annotations);
         return tool;
@@ -215,47 +236,76 @@ public final class McpServer implements AutoCloseable {
 
     private JsonObject callTool(JsonElement paramsElement) {
         if (paramsElement == null || !paramsElement.isJsonObject()) {
-            return errorResult("invalid_params", "tools/call requires an object");
+            return errorResult(ToolResult.rejected("invalid_params",
+                    "tools/call requires an object"));
         }
         JsonObject params = paramsElement.getAsJsonObject();
         JsonElement nameElement = params.get("name");
         if (nameElement == null || !nameElement.isJsonPrimitive()) {
-            return errorResult("invalid_params", "tools/call requires a tool name");
+            return errorResult(ToolResult.rejected("invalid_params",
+                    "tools/call requires a tool name"));
         }
 
-        String toolName = nameElement.getAsString();
-        String text = switch (toolName) {
-            case "ping" -> "pong";
-            case "state" -> gson.toJson(Objects.requireNonNull(stateSupplier.get(), "state"));
-            default -> null;
-        };
-        if (text == null) {
-            return errorResult("unknown_tool", "Unknown tool: " + toolName);
-        }
-
-        JsonObject content = new JsonObject();
-        content.addProperty("type", "text");
-        content.addProperty("text", text);
-        JsonArray contents = new JsonArray();
-        contents.add(content);
-
-        JsonObject result = new JsonObject();
-        result.add("content", contents);
-        result.addProperty("isError", false);
-        return result;
+        Map<String, Object> arguments = decodeArguments(params.get("arguments"));
+        ToolResult result = tools.invoke(nameElement.getAsString(), arguments);
+        return errorResult(result);
     }
 
-    private JsonObject errorResult(String code, String message) {
+    private static Map<String, Object> decodeArguments(JsonElement argumentsElement) {
+        if (argumentsElement == null || !argumentsElement.isJsonObject()) {
+            return Map.of();
+        }
+        Map<String, Object> arguments = new LinkedHashMap<>();
+        for (Map.Entry<String, JsonElement> entry : argumentsElement.getAsJsonObject().entrySet()) {
+            JsonElement value = entry.getValue();
+            if (value == null || value.isJsonNull()) {
+                continue;
+            }
+            if (value.isJsonPrimitive()) {
+                var primitive = value.getAsJsonPrimitive();
+                if (primitive.isBoolean()) {
+                    arguments.put(entry.getKey(), primitive.getAsBoolean());
+                } else if (primitive.isNumber()) {
+                    arguments.put(entry.getKey(), decodeNumber(primitive));
+                } else {
+                    arguments.put(entry.getKey(), primitive.getAsString());
+                }
+            } else {
+                arguments.put(entry.getKey(), value.toString());
+            }
+        }
+        return arguments;
+    }
+
+    /**
+     * Gson hands back {@code LazilyParsedNumber}, which is neither Integer nor Long.
+     * Normalise to the widest integer type or to Double so validation can match types.
+     */
+    private static Object decodeNumber(com.google.gson.JsonPrimitive primitive) {
+        String raw = primitive.getAsString();
+        if (raw.indexOf('.') < 0 && raw.indexOf('e') < 0 && raw.indexOf('E') < 0) {
+            try {
+                return Long.parseLong(raw);
+            } catch (NumberFormatException ignored) {
+                return primitive.getAsDouble();
+            }
+        }
+        return primitive.getAsDouble();
+    }
+
+    private JsonObject errorResult(ToolResult result) {
         JsonObject content = new JsonObject();
         content.addProperty("type", "text");
-        content.addProperty("text", code + ": " + message);
+        content.addProperty("text", result.status() == ToolResult.Status.OK
+                ? result.message()
+                : result.code() + ": " + result.message());
         JsonArray contents = new JsonArray();
         contents.add(content);
 
-        JsonObject result = new JsonObject();
-        result.add("content", contents);
-        result.addProperty("isError", true);
-        return result;
+        JsonObject response = new JsonObject();
+        response.add("content", contents);
+        response.addProperty("isError", result.isError());
+        return response;
     }
 
     private JsonObject error(JsonElement id, int code, String message) {

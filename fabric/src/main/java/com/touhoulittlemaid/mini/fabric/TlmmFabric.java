@@ -3,7 +3,9 @@ package com.touhoulittlemaid.mini.fabric;
 import com.touhoulittlemaid.mini.core.PlatformState;
 import com.touhoulittlemaid.mini.fabric.command.CompanionCommands;
 import com.touhoulittlemaid.mini.fabric.content.FabricContent;
+import com.touhoulittlemaid.mini.fabric.mcp.FabricCompanionBackend;
 import com.touhoulittlemaid.mini.fabric.persistence.M0SavedData;
+import com.touhoulittlemaid.mini.mcp.CompanionTools;
 import com.touhoulittlemaid.mini.mcp.McpServer;
 import com.touhoulittlemaid.mini.mcp.McpServerConfig;
 
@@ -33,7 +35,7 @@ public final class TlmmFabric implements ModInitializer {
             int saveVersion = M0SavedData.get(server).value();
             LOGGER.info("[m0] saved-data baseline value={}", saveVersion);
             state.set(state.get().ready());
-            startMcp();
+            startMcp(server);
         });
         ServerLifecycleEvents.SERVER_STOPPED.register(server -> {
             stopMcp();
@@ -43,7 +45,7 @@ public final class TlmmFabric implements ModInitializer {
                 MOD_VERSION, MINECRAFT_VERSION);
     }
 
-    private void startMcp() {
+    private void startMcp(net.minecraft.server.MinecraftServer server) {
         if (mcpServer != null) {
             return;
         }
@@ -60,7 +62,7 @@ public final class TlmmFabric implements ModInitializer {
         int port = Integer.getInteger("tlmm.mcp.port", 8765);
         McpServer candidate = new McpServer(
                 new McpServerConfig(McpServerConfig.LOOPBACK, port, token),
-                state::get);
+                CompanionTools.registry(new FabricCompanionBackend(server)));
         try {
             candidate.start();
             mcpServer = candidate;
