@@ -215,13 +215,18 @@ $env:PATH="$env:JAVA_HOME\bin;$env:PATH"
 
 尚未完成（M2 收尾）：
 
+- **`companion_interact` 被平台阻塞**：Minecraft `26.3` 的 `useItemOn` /
+  `useWithoutItem` 只接受 `Player`，同伴实体无法右键方块。当前明确返回
+  `unsupported_interaction`，不伪造成功。详见 `docs/validation/M2.md` 第 4 节。
 - `companion_context` 目前只按半径统计方块，尚未支持标签与实体过滤。
-- `companion_interact` 只读取目标方块，尚未真正右键交互。
 - `companion_inventory` 只读单槽，尚未支持 `action` 与装备槽。
 - 事件长轮询是即时返回，尚未真正挂起等待 `timeout_seconds`。
 - Token 按同伴授权、撤销与过期属于 M3。
 - 客户端 MCP 连接状态显示。
-- `docs/validation/M2.md` 与 M2 完成提交。
+
+M2 结论：协议、认证、作用域、审计、幂等、事件与线程桥接为 **Go**；
+`companion_interact` 写交互为 **No-Go**，因此 M2 未标记完成。
+验收记录见 `docs/validation/M2.md`。
 
 ## 恢复工作
 

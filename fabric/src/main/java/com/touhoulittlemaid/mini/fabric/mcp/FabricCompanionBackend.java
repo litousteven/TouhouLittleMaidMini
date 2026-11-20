@@ -58,6 +58,12 @@ public final class FabricCompanionBackend implements CompanionTools.CompanionBac
         }));
     }
 
+    /**
+     * Block interaction is gated on a {@code Player} in Minecraft 26.3: both
+     * {@code useItemOn} and {@code useWithoutItem} take a Player, and a companion is not
+     * one. Rather than emulate a Player or silently mutate owner state, this reports the
+     * platform limitation so the agent can choose another approach.
+     */
     @Override
     public ToolResult interact(UUID companionId, int x, int y, int z) {
         return runOnServer(ignored -> withCompanion(companionId, companion -> {
@@ -66,8 +72,12 @@ public final class FabricCompanionBackend implements CompanionTools.CompanionBac
             if (!level.isLoaded(pos)) {
                 return ToolResult.rejected("not_loaded", "block is not loaded");
             }
-            var state = level.getBlockState(pos);
-            return ToolResult.ok("observed_block", state.toString());
+            String blockId = level.getBlockState(pos).getBlock()
+                    .builtInRegistryHolder().key().identifier().toString();
+            return ToolResult.rejected("unsupported_interaction",
+                    "Minecraft 26.3 block interaction requires a Player context; "
+                            + "companion body interaction is scheduled for M3 (block="
+                            + blockId + ")");
         }));
     }
 
@@ -120,8 +130,13 @@ public final class FabricCompanionBackend implements CompanionTools.CompanionBac
             if (stack.isEmpty()) {
                 return ToolResult.ok("empty_slot", "slot " + slot + " is empty");
             }
-            return ToolResult.ok("item", stack.getItem().toString() + " x" + stack.getCount());
+            return ToolResult.ok("item", itemJson(stack));
         }));
+    }
+
+    private static String itemJson(ItemStack stack) {
+        return "{\"item\":\"" + stack.getItem().builtInRegistryHolder().key().identifier()
+                + "\",\"count\":" + stack.getCount() + '}';
     }
 
     @Override

@@ -156,6 +156,29 @@ public final class M2ToolPipelineGameTests {
     }
 
     @GameTest(maxTicks = 100)
+    public void interactionReportsThePlatformLimitInsteadOfPretending(GameTestHelper helper) {
+        CompanionEntity companion = helper.spawn(FabricContent.COMPANION, 2, 2, 2);
+        ToolRegistry registry = registryFor(helper);
+        var pos = helper.absolutePos(new net.minecraft.core.BlockPos(1, 2, 1));
+
+        ToolResult result = registry.invoke("companion_interact", Map.of(
+                "companion_id", companion.getUUID().toString(),
+                "x", pos.getX(),
+                "y", pos.getY(),
+                "z", pos.getZ()));
+
+        if (result.status() != ToolResult.Status.REJECTED) {
+            throw helper.assertionException(
+                    "interact must report the platform limit rather than succeed: "
+                            + text(result));
+        }
+        if (!result.code().equals("unsupported_interaction")) {
+            throw helper.assertionException("unexpected code: " + text(result));
+        }
+        helper.succeed();
+    }
+
+    @GameTest(maxTicks = 100)
     public void contextReportsNearbyBlocks(GameTestHelper helper) {
         CompanionEntity companion = helper.spawn(FabricContent.COMPANION, 2, 2, 2);
         ToolRegistry registry = registryFor(helper);
