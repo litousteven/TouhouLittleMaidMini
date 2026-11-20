@@ -28,6 +28,7 @@ TouhouLittleMaid 的实体和交互形态，但**不复制它不断增长的任�
 - [MCP 工具与事件契约](docs/04-mcp-contract.md)
 - [Skill 与模组适配模型](docs/05-skill-and-extension-model.md)
 - [Minecraft 版本升级 Runbook](docs/06-version-upgrade-playbook.md)
+- [参考仓库与借鉴边界](docs/01-technical-design.md#0-参考仓库与借鉴边界)
 - [Codex 项目级 MCP 配置](.codex/config.toml)
 - [服务端配置示例](config-examples/touhou-little-maid-mini-server.toml)
 - [调试环境变量示例](config-examples/mcp-token.env.example)

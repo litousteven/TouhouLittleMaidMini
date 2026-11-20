@@ -3,6 +3,19 @@
 版本：`0.1-design`  
 目标平台：Minecraft `26.3`、NeoForge `26.3.0.101`、Java `25`
 
+## 0. 参考仓库与借鉴边界
+
+本项目当前只把下面两个公开仓库作为设计参考，不把它们直接变成首版运行时依赖：
+
+| 仓库 | 固定参考点 | 借鉴内容 | 明确不继承 |
+|---|---|---|---|
+| [TouhouLittleMaid-26.1](https://github.com/TouhouLittleMaid/TouhouLittleMaid-26.1) | `master`；在实现前记录实际审阅 commit | 女仆同伴的产品形态、实体/装备/管理界面需要解决的问题，以及跨版本适配的复杂度 | 不 fork；不依赖 TLM 内部类；不复制模型、声音、贴图或任务体系 |
+| [minecraft-numen](https://github.com/Dwinovo/minecraft-numen) | `v0.1.5-26.3-beta`（commit `1abb37e`）；M0 时复核发布状态和实际依赖 | 外部大脑驾驶、纯 JVM MCP/权限边界、事件与长等待、插件/Skill 的扩展思路 | 不引入内置 LLM、Lua/任意脚本、Numen 假玩家身体或其完整模组架构 |
+
+许可证边界也按仓库分别处理：TLM 仓库标注为 MIT；Numen 源码标注为 LGPL-3.0，
+其美术资源另有权利声明。只有在 M0 证明确实需要 vendor Numen 的纯 JVM 模块时，才
+引入对应源码和 NOTICE；不能把参考仓库中的资源默认视为本项目资产。
+
 ## 1. 结论
 
 项目采用**独立轻量同伴模组 + 外部 MCP Agent + Skill/数据驱动的扩展方式**。
@@ -18,7 +31,9 @@ Java。
   Task、模型包、GUI、网络、语音和内置 LLM。直接 fork 后再移植到 `26.3` 不符合
   “精简版”目标。
 - TLM 当前公开主线仍是 `26.1.2`，没有可依赖的 `26.3` 版本。
-- Numen 已有可工作的 `26.3` 分支，并提供了无 Minecraft 依赖的通用 MCP 传输模块。
+- Numen 已有 `v0.1.5-26.3-beta` 预发行标签，并提供了不认识同伴和游戏的纯 JVM
+  MCP 模块；README 的支持版本表与 Release 页面需要在 M0 一并核对，不能直接把
+  Release 标签当成稳定制品。
 - 自定义 Mob 更接近 TLM 的女仆形态，但会牺牲 Numen `ServerPlayer` 的通用玩家能力。
   首版明确选择“可由 AI 组合的轻量身体”，不承诺成为万能玩家。
 
@@ -84,14 +99,17 @@ flowchart LR
 
 ### 3.2 MCP 实现策略
 
-优先复用 Numen `26.3` 分支的 `numen-mcp-26.3:0.1.5`：
+优先评估 Numen `v0.1.5-26.3-beta` 中与目标版本匹配的 `mcp` 纯 JVM 模块：
 
 - 纯 JVM，不依赖 Minecraft。
 - 提供 Streamable HTTP、Bearer Token、限流、会话和审计。
 - `McpHost` 只要求宿主提供工具表和文本结果，适合接自定义同伴实体。
 
-阶段 0 必须验证该制品是否可从公开 Maven 获取。若不能稳定获取，就固定 Numen
-`26.3` 标签并把纯 JVM `mcp` 模块 vendor 到本项目，保留 LGPL 声明，不从零重写协议。
+阶段 0 必须记录上游标签、commit、实际 Maven 坐标和许可证文件，并验证制品是否能从
+公开 Maven 获取。若制品不能稳定获取，就固定已审阅的 `v0.1.5-26.3-beta` 纯 JVM
+模块并 vendor 到本项目，保留 LGPL 声明，不把 Numen 的 Minecraft 适配层带入；也可以
+改为自研本项目所需的最小协议层。若上游接口与本项目的动作、权限或审计边界不一致，
+以本项目的 `core` 和 MCP 契约为准。
 
 ## 4. 同伴身体
 
