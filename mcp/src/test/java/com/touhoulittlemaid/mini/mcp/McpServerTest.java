@@ -53,7 +53,7 @@ class McpServerTest {
 
         JsonObject tools = call(endpoint, request(2, "tools/list", new JsonObject()));
         JsonArray list = tools.getAsJsonObject("result").getAsJsonArray("tools");
-        assertEquals(8, list.size());
+        assertEquals(10, list.size());
         assertTrue(list.size() <= 10, "MCP tool budget is ten tools");
 
         JsonObject first = list.get(0).getAsJsonObject();
@@ -167,6 +167,30 @@ class McpServerTest {
     }
 
     @Test
+    void repeatedRequestIdReplaysWithoutRunningTheBodyTwice() throws Exception {
+        StubBackend backend = new StubBackend();
+        server = new McpServer(
+                new McpServerConfig(McpServerConfig.LOOPBACK, 0, TOKEN),
+                CompanionTools.registry(backend));
+        server.start();
+
+        JsonObject arguments = new JsonObject();
+        arguments.addProperty("companion_id", COMPANION.toString());
+        arguments.addProperty("after_seq", 0);
+
+        JsonObject first = new JsonObject();
+        first.addProperty("name", "companion_wait_events");
+        first.add("arguments", arguments);
+        first.addProperty("request_id", "req-abc-123");
+
+        call(endpoint(), request(20, "tools/call", first));
+        call(endpoint(), request(21, "tools/call", first));
+
+        assertEquals(1, backend.waitCalls.get(),
+                "a repeated request_id must not run the body a second time");
+    }
+
+    @Test
     void closeReleasesTheListeningPort() throws Exception {
         server = start();
         int port = server.port();
@@ -221,6 +245,9 @@ class McpServerTest {
 
     private static final class StubBackend implements CompanionTools.CompanionBackend {
 
+        private final java.util.concurrent.atomic.AtomicInteger waitCalls =
+                new java.util.concurrent.atomic.AtomicInteger();
+
         @Override
         public List<CompanionSnapshot> listCompanions() {
             return List.of(new CompanionSnapshot(COMPANION, Optional.empty(), "Alice",
@@ -244,6 +271,11 @@ class McpServerTest {
         }
 
         @Override
+        public ToolResult context(UUID companionId, int radius) {
+            return ToolResult.ok("context", "{\"scanned\":1,\"blocks\":{}}");
+        }
+
+        @Override
         public ToolResult inventory(UUID companionId, int slot) {
             return ToolResult.ok("slot", "empty");
         }
@@ -259,8 +291,16 @@ class McpServerTest {
         }
 
         @Override
-        public ToolResult wait(UUID companionId, int ticks) {
-            return ToolResult.ok("waited", "waited");
+        public ToolResult waitEvents(UUID companionId, long afterSequence,
+                int timeoutSeconds, int maxEvents) {
+            waitCalls.incrementAndGet();
+            return ToolResult.ok("events",
+                    "{\"events\":[],\"next_seq\":" + afterSequence + ",\"timed_out\":true}");
+        }
+
+        @Override
+        public ToolResult say(UUID companionId, String text) {
+            return ToolResult.ok("said", "said");
         }
     }
 }

@@ -9,6 +9,7 @@ import com.google.gson.JsonParseException;
 import com.google.gson.JsonParser;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
+import com.touhoulittlemaid.mini.core.ActionKind;
 import com.touhoulittlemaid.mini.core.ToolResult;
 import com.touhoulittlemaid.mini.core.ToolSpec;
 
@@ -20,6 +21,7 @@ import java.security.NoSuchAlgorithmException;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -35,20 +37,35 @@ public final class McpServer implements AutoCloseable {
     public static final String PATH = "/mcp";
     public static final String PROTOCOL_VERSION = "2025-11-25";
     private static final int MAX_BODY_BYTES = 64 * 1024;
+    private static final int IDEMPOTENCY_CAPACITY = 256;
 
     private final McpServerConfig config;
     private final ToolRegistry tools;
     private final Gson gson;
     private final byte[] tokenDigest;
+    private final String tokenDigestId;
+    private final TokenScope scope;
+    private final AuditLog.Sink auditSink;
+
+    /** Replays a repeated request_id so a retried call never runs the body twice. */
+    private final Map<String, Map<String, JsonObject>> idempotency = new LinkedHashMap<>();
 
     private HttpServer server;
     private ExecutorService executor;
 
     public McpServer(McpServerConfig config, ToolRegistry tools) {
+        this(config, tools, TokenScope.FULL, event -> { });
+    }
+
+    public McpServer(McpServerConfig config, ToolRegistry tools,
+            TokenScope scope, AuditLog.Sink auditSink) {
         this.config = Objects.requireNonNull(config, "config");
         this.tools = Objects.requireNonNull(tools, "tools");
+        this.scope = Objects.requireNonNull(scope, "scope");
+        this.auditSink = Objects.requireNonNull(auditSink, "auditSink");
         this.gson = new Gson();
         this.tokenDigest = sha256(config.bearerToken());
+        this.tokenDigestId = AuditLog.digestId(config.bearerToken());
     }
 
     public synchronized void start() throws IOException {
@@ -247,8 +264,85 @@ public final class McpServer implements AutoCloseable {
         }
 
         Map<String, Object> arguments = decodeArguments(params.get("arguments"));
-        ToolResult result = tools.invoke(nameElement.getAsString(), arguments);
-        return errorResult(result);
+        String requestId = requestId(params);
+        String toolName = nameElement.getAsString();
+
+        if (requestId != null) {
+            JsonObject cached = replayOf(requestId, toolName);
+            if (cached != null) {
+                return cached;
+            }
+        }
+
+        long startedAt = System.nanoTime();
+        ToolResult result = scopeCheck(toolName)
+                .orElseGet(() -> tools.invoke(toolName, arguments));
+        JsonObject response = errorResult(result);
+
+        long durationMillis = (System.nanoTime() - startedAt) / 1_000_000L;
+        auditSink.record(new AuditLog.AuditEvent(
+                requestId,
+                tokenDigestId,
+                toolName,
+                AuditLog.companionId(arguments).orElse(null),
+                result.status().name(),
+                result.code(),
+                durationMillis));
+
+        if (requestId != null) {
+            remember(requestId, toolName, response);
+        }
+        return response;
+    }
+
+    /** Returns a refusal when the token may not run this tool, or empty to proceed. */
+    private Optional<ToolResult> scopeCheck(String toolName) {
+        ActionKind kind;
+        try {
+            kind = TokenScope.actionOf(toolName);
+        } catch (IllegalArgumentException exception) {
+            return Optional.of(ToolResult.unknownTool(toolName));
+        }
+        if (!scope.allows(kind)) {
+            return Optional.of(ToolResult.rejected("scope_denied",
+                    "This token may not use " + toolName));
+        }
+        if (kind == ActionKind.INTERACT && !scope.canInteractWithWorld()) {
+            return Optional.of(ToolResult.rejected("scope_denied",
+                    "This token may not interact with the world"));
+        }
+        return Optional.empty();
+    }
+
+    /** Optional client-supplied idempotency key. */
+    private static String requestId(JsonObject params) {
+        JsonElement requestId = params.get("request_id");
+        if (requestId == null || !requestId.isJsonPrimitive()) {
+            return null;
+        }
+        String value = requestId.getAsString();
+        return value.isBlank() ? null : value;
+    }
+
+    private JsonObject replayOf(String requestId, String toolName) {
+        synchronized (idempotency) {
+            Map<String, JsonObject> byTool = idempotency.get(requestId);
+            if (byTool == null) {
+                return null;
+            }
+            JsonObject cached = byTool.get(toolName);
+            return cached == null ? null : cached.deepCopy();
+        }
+    }
+
+    private void remember(String requestId, String toolName, JsonObject response) {
+        synchronized (idempotency) {
+            if (idempotency.size() >= IDEMPOTENCY_CAPACITY) {
+                idempotency.clear();
+            }
+            idempotency.computeIfAbsent(requestId, key -> new LinkedHashMap<>())
+                    .put(toolName, response.deepCopy());
+        }
     }
 
     private static Map<String, Object> decodeArguments(JsonElement argumentsElement) {

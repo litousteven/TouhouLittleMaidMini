@@ -22,8 +22,12 @@ import net.minecraft.gametest.framework.GameTestHelper;
 public final class M2ToolPipelineGameTests {
 
     private static ToolRegistry registryFor(GameTestHelper helper) {
-        return CompanionTools.registry(
-                new FabricCompanionBackend(helper.getLevel().getServer()));
+        return registryFor(helper, new FabricCompanionBackend(helper.getLevel().getServer()));
+    }
+
+    private static ToolRegistry registryFor(GameTestHelper helper,
+            FabricCompanionBackend backend) {
+        return CompanionTools.registry(backend);
     }
 
     private static String text(ToolResult result) {
@@ -107,9 +111,11 @@ public final class M2ToolPipelineGameTests {
     }
 
     @GameTest(maxTicks = 100)
-    public void stopAndWaitWorkOnARealCompanion(GameTestHelper helper) {
+    public void stopAndEventPollingWorkOnARealCompanion(GameTestHelper helper) {
         CompanionEntity companion = helper.spawn(FabricContent.COMPANION, 2, 2, 2);
-        ToolRegistry registry = registryFor(helper);
+        FabricCompanionBackend backend = new FabricCompanionBackend(
+                helper.getLevel().getServer());
+        ToolRegistry registry = registryFor(helper, backend);
         String id = companion.getUUID().toString();
 
         ToolResult stopped = registry.invoke("companion_stop", Map.of("companion_id", id));
@@ -117,10 +123,52 @@ public final class M2ToolPipelineGameTests {
             throw helper.assertionException("companion_stop failed: " + text(stopped));
         }
 
-        ToolResult waited = registry.invoke("companion_wait", Map.of(
-                "companion_id", id, "ticks", 10));
-        if (waited.status() != ToolResult.Status.OK) {
-            throw helper.assertionException("companion_wait failed: " + text(waited));
+        ToolResult events = registry.invoke("companion_wait_events", Map.of(
+                "companion_id", id, "after_seq", 0, "max_events", 10));
+        if (events.status() != ToolResult.Status.OK) {
+            throw helper.assertionException("companion_wait_events failed: " + text(events));
+        }
+        if (!events.message().contains("operation_stopped")) {
+            throw helper.assertionException("stop must publish an operation_stopped event: "
+                    + events.message());
+        }
+        helper.succeed();
+    }
+
+    @GameTest(maxTicks = 100)
+    public void behaviorChangePublishesAnEvent(GameTestHelper helper) {
+        CompanionEntity companion = helper.spawn(FabricContent.COMPANION, 2, 2, 2);
+        FabricCompanionBackend backend = new FabricCompanionBackend(
+                helper.getLevel().getServer());
+        ToolRegistry registry = registryFor(helper, backend);
+        String id = companion.getUUID().toString();
+
+        registry.invoke("companion_set_behavior", Map.of(
+                "companion_id", id, "behavior", "follow"));
+
+        ToolResult events = registry.invoke("companion_wait_events", Map.of(
+                "companion_id", id, "after_seq", 0, "max_events", 10));
+        if (!events.message().contains("behavior_changed")) {
+            throw helper.assertionException("behaviour change must publish an event: "
+                    + events.message());
+        }
+        helper.succeed();
+    }
+
+    @GameTest(maxTicks = 100)
+    public void contextReportsNearbyBlocks(GameTestHelper helper) {
+        CompanionEntity companion = helper.spawn(FabricContent.COMPANION, 2, 2, 2);
+        ToolRegistry registry = registryFor(helper);
+
+        ToolResult result = registry.invoke("companion_context", Map.of(
+                "companion_id", companion.getUUID().toString(),
+                "radius", 2));
+        if (result.status() != ToolResult.Status.OK) {
+            throw helper.assertionException("companion_context failed: " + text(result));
+        }
+        if (!result.message().contains("\"scanned\"")) {
+            throw helper.assertionException("context must report how much it scanned: "
+                    + result.message());
         }
         helper.succeed();
     }
@@ -130,21 +178,22 @@ public final class M2ToolPipelineGameTests {
         ToolRegistry registry = registryFor(helper);
         String missing = UUID.randomUUID().toString();
 
-        for (String tool : new String[] {
-                "companion_move", "companion_interact", "companion_inventory",
-                "companion_set_behavior", "companion_stop", "companion_wait"}) {
-            Map<String, Object> arguments = new java.util.HashMap<>();
-            arguments.put("companion_id", missing);
-            arguments.put("x", 0);
-            arguments.put("y", 0);
-            arguments.put("z", 0);
-            arguments.put("slot", 0);
-            arguments.put("behavior", "stay");
-            arguments.put("ticks", 1);
+        Map<String, Map<String, Object>> calls = new java.util.LinkedHashMap<>();
+        calls.put("companion_move", Map.of("companion_id", missing, "x", 0, "y", 0, "z", 0));
+        calls.put("companion_interact", Map.of("companion_id", missing, "x", 0, "y", 0, "z", 0));
+        calls.put("companion_context", Map.of("companion_id", missing, "radius", 1));
+        calls.put("companion_inventory", Map.of("companion_id", missing, "slot", 0));
+        calls.put("companion_set_behavior", Map.of("companion_id", missing, "behavior", "stay"));
+        calls.put("companion_stop", Map.of("companion_id", missing));
+        calls.put("companion_wait_events", Map.of("companion_id", missing, "after_seq", 0));
+        calls.put("companion_say", Map.of("companion_id", missing, "text", "hi"));
 
-            ToolResult result = registry.invoke(tool, arguments);
-            if (result.status() != ToolResult.Status.REJECTED) {
-                throw helper.assertionException(tool + " must refuse an unknown companion: "
+        for (Map.Entry<String, Map<String, Object>> call : calls.entrySet()) {
+            ToolResult result = registry.invoke(call.getKey(), call.getValue());
+            if (result.status() != ToolResult.Status.REJECTED
+                    || !result.code().equals("unknown_companion")) {
+                throw helper.assertionException(call.getKey()
+                        + " must refuse an unknown companion with unknown_companion: "
                         + text(result));
             }
         }

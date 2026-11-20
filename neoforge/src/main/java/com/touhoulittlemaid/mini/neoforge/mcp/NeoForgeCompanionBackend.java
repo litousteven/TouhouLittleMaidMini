@@ -41,6 +41,11 @@ public final class NeoForgeCompanionBackend implements CompanionTools.CompanionB
     }
 
     @Override
+    public ToolResult context(UUID companionId, int radius) {
+        return unavailable();
+    }
+
+    @Override
     public ToolResult inventory(UUID companionId, int slot) {
         return unavailable();
     }
@@ -56,7 +61,13 @@ public final class NeoForgeCompanionBackend implements CompanionTools.CompanionB
     }
 
     @Override
-    public ToolResult wait(UUID companionId, int ticks) {
+    public ToolResult waitEvents(UUID companionId, long afterSequence,
+            int timeoutSeconds, int maxEvents) {
+        return unavailable();
+    }
+
+    @Override
+    public ToolResult say(UUID companionId, String text) {
         return unavailable();
     }
 

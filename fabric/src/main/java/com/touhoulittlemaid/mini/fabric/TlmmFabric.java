@@ -8,6 +8,7 @@ import com.touhoulittlemaid.mini.fabric.persistence.M0SavedData;
 import com.touhoulittlemaid.mini.mcp.CompanionTools;
 import com.touhoulittlemaid.mini.mcp.McpServer;
 import com.touhoulittlemaid.mini.mcp.McpServerConfig;
+import com.touhoulittlemaid.mini.mcp.TokenScope;
 
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -62,7 +63,9 @@ public final class TlmmFabric implements ModInitializer {
         int port = Integer.getInteger("tlmm.mcp.port", 8765);
         McpServer candidate = new McpServer(
                 new McpServerConfig(McpServerConfig.LOOPBACK, port, token),
-                CompanionTools.registry(new FabricCompanionBackend(server)));
+                CompanionTools.registry(new FabricCompanionBackend(server)),
+                scopeFromEnvironment(),
+                event -> LOGGER.info(event.format()));
         try {
             candidate.start();
             mcpServer = candidate;
@@ -72,6 +75,16 @@ public final class TlmmFabric implements ModInitializer {
             candidate.close();
             LOGGER.error("[mcp] failed to start loopback endpoint", exception);
         }
+    }
+
+    /**
+     * A read-only token is opt-in via {@code TLMM_MCP_READ_ONLY=1}; the development
+     * default keeps full access because the token is already scoped to loopback.
+     */
+    private static TokenScope scopeFromEnvironment() {
+        return "1".equals(System.getenv("TLMM_MCP_READ_ONLY"))
+                ? TokenScope.READ_ONLY
+                : TokenScope.FULL;
     }
 
     private void stopMcp() {

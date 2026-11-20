@@ -28,6 +28,7 @@ class CompanionToolsTest {
         private LocalBehavior lastBehavior;
         private int[] lastMove;
         private UUID lastStop;
+        private String said;
 
         @Override
         public List<CompanionSnapshot> listCompanions() {
@@ -56,6 +57,11 @@ class CompanionToolsTest {
         }
 
         @Override
+        public ToolResult context(UUID companionId, int radius) {
+            return ToolResult.ok("context", "{\"scanned\":1,\"blocks\":{}}");
+        }
+
+        @Override
         public ToolResult inventory(UUID companionId, int slot) {
             return ToolResult.ok("slot", "empty");
         }
@@ -73,9 +79,17 @@ class CompanionToolsTest {
         }
 
         @Override
-        public ToolResult wait(UUID companionId, int ticks) {
-            waits.addAndGet(ticks);
-            return ToolResult.ok("waited", "waited " + ticks);
+        public ToolResult waitEvents(UUID companionId, long afterSequence,
+                int timeoutSeconds, int maxEvents) {
+            waits.addAndGet(1);
+            return ToolResult.ok("events",
+                    "{\"events\":[],\"next_seq\":" + afterSequence + ",\"timed_out\":true}");
+        }
+
+        @Override
+        public ToolResult say(UUID companionId, String text) {
+            said = text;
+            return ToolResult.ok("said", "said");
         }
     }
 
@@ -87,7 +101,7 @@ class CompanionToolsTest {
     void toolSurfaceStaysWithinBudgetAndCoversEveryActionFamily() {
         ToolRegistry registry = registry(new RecordingBackend());
         assertTrue(registry.size() <= 10, "MCP tool budget is ten tools");
-        assertEquals(8, registry.size());
+        assertEquals(10, registry.size());
 
         List<String> names = registry.tools().stream().map(ToolSpec::name).toList();
         assertEquals(List.of(
@@ -95,9 +109,11 @@ class CompanionToolsTest {
                 "companion_state",
                 "companion_move",
                 "companion_interact",
+                "companion_context",
                 "companion_inventory",
                 "companion_set_behavior",
-                "companion_wait",
+                "companion_wait_events",
+                "companion_say",
                 "companion_stop"), names);
 
         assertEquals(6, CompanionTools.coveredActions().size());
@@ -116,7 +132,7 @@ class CompanionToolsTest {
     @Test
     void missingRequiredParameterIsRejectedBeforeReachingTheBody() {
         RecordingBackend backend = new RecordingBackend();
-        ToolResult result = registry(backend).invoke("companion_wait", Map.of());
+        ToolResult result = registry(backend).invoke("companion_wait_events", Map.of());
 
         assertEquals(ToolResult.Status.REJECTED, result.status());
         assertEquals("invalid_params", result.code());
@@ -147,9 +163,9 @@ class CompanionToolsTest {
     @Test
     void numericMinimumIsEnforced() {
         ToolResult result = registry(new RecordingBackend())
-                .invoke("companion_wait", Map.of(
+                .invoke("companion_wait_events", Map.of(
                         "companion_id", COMPANION.toString(),
-                        "ticks", 0));
+                        "after_seq", -1));
 
         assertEquals(ToolResult.Status.REJECTED, result.status());
     }
@@ -157,12 +173,40 @@ class CompanionToolsTest {
     @Test
     void validCallReachesTheBody() {
         RecordingBackend backend = new RecordingBackend();
-        ToolResult result = registry(backend).invoke("companion_wait", Map.of(
+        ToolResult result = registry(backend).invoke("companion_wait_events", Map.of(
                 "companion_id", COMPANION.toString(),
-                "ticks", 20));
+                "after_seq", 7));
 
         assertEquals(ToolResult.Status.OK, result.status());
-        assertEquals(20, backend.waits.get());
+        assertEquals(1, backend.waits.get());
+    }
+
+    @Test
+    void sayRejectsBlankAndOverlongText() {
+        RecordingBackend backend = new RecordingBackend();
+        ToolRegistry registry = registry(backend);
+
+        ToolResult blank = registry.invoke("companion_say", Map.of(
+                "companion_id", COMPANION.toString(),
+                "text", "   "));
+        assertEquals(ToolResult.Status.REJECTED, blank.status());
+
+        ToolResult tooLong = registry.invoke("companion_say", Map.of(
+                "companion_id", COMPANION.toString(),
+                "text", "x".repeat(281)));
+        assertEquals(ToolResult.Status.REJECTED, tooLong.status());
+        assertEquals(null, backend.said);
+    }
+
+    @Test
+    void sayAcceptsAShortLine() {
+        RecordingBackend backend = new RecordingBackend();
+        ToolResult result = registry(backend).invoke("companion_say", Map.of(
+                "companion_id", COMPANION.toString(),
+                "text", "Wheat harvested."));
+
+        assertEquals(ToolResult.Status.OK, result.status());
+        assertEquals("Wheat harvested.", backend.said);
     }
 
     @Test

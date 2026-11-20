@@ -30,6 +30,8 @@ public final class FabricCompanionBackend implements CompanionTools.CompanionBac
     private static final long REQUEST_TIMEOUT_SECONDS = 10L;
 
     private final MinecraftServer server;
+    private final com.touhoulittlemaid.mini.mcp.EventBus events =
+            new com.touhoulittlemaid.mini.mcp.EventBus();
 
     public FabricCompanionBackend(MinecraftServer server) {
         this.server = server;
@@ -70,6 +72,45 @@ public final class FabricCompanionBackend implements CompanionTools.CompanionBac
     }
 
     @Override
+    public ToolResult context(UUID companionId, int radius) {
+        return runOnServer(ignored -> withCompanion(companionId, companion -> {
+            var level = companion.level();
+            var origin = companion.blockPosition();
+            java.util.Map<String, Integer> counts = new java.util.TreeMap<>();
+            int scanned = 0;
+            for (int dx = -radius; dx <= radius; dx++) {
+                for (int dy = -radius; dy <= radius; dy++) {
+                    for (int dz = -radius; dz <= radius; dz++) {
+                        var pos = origin.offset(dx, dy, dz);
+                        if (!level.isLoaded(pos)) {
+                            continue;
+                        }
+                        scanned++;
+                        var state = level.getBlockState(pos);
+                        if (state.isAir()) {
+                            continue;
+                        }
+                        String id = state.getBlock().builtInRegistryHolder().key()
+                                .identifier().toString();
+                        counts.merge(id, 1, Integer::sum);
+                    }
+                }
+            }
+            StringBuilder json = new StringBuilder("{\"scanned\":").append(scanned)
+                    .append(",\"blocks\":{");
+            boolean first = true;
+            for (var entry : counts.entrySet()) {
+                if (!first) {
+                    json.append(',');
+                }
+                first = false;
+                json.append('"').append(entry.getKey()).append("\":").append(entry.getValue());
+            }
+            return ToolResult.ok("context", json.append("}}").toString());
+        }));
+    }
+
+    @Override
     public ToolResult inventory(UUID companionId, int slot) {
         return runOnServer(ignored -> withCompanion(companionId, companion -> {
             if (slot < 0 || slot >= companion.backpack().getContainerSize()) {
@@ -86,8 +127,48 @@ public final class FabricCompanionBackend implements CompanionTools.CompanionBac
     @Override
     public ToolResult setBehavior(UUID companionId, LocalBehavior behavior) {
         return runOnServer(ignored -> withCompanion(companionId, companion -> {
+            LocalBehavior previous = companion.behavior();
             companion.setBehavior(behavior);
+            if (previous != behavior) {
+                events.publish(companionId.toString(), "behavior_changed",
+                        "{\"previous\":\"" + previous.id() + "\",\"current\":\""
+                                + behavior.id() + "\"}");
+            }
             return ToolResult.ok("behavior_set", behavior.id());
+        }));
+    }
+
+    @Override
+    public ToolResult waitEvents(UUID companionId, long afterSequence,
+            int timeoutSeconds, int maxEvents) {
+        return runOnServer(ignored -> withCompanion(companionId, companion -> {
+            if (events.cursorExpired(afterSequence)) {
+                return ToolResult.rejected("event_cursor_expired",
+                        "Cursor is older than the retained window; call companion_state first");
+            }
+            List<com.touhoulittlemaid.mini.core.CompanionEvent> pending =
+                    events.after(afterSequence, maxEvents);
+            StringBuilder json = new StringBuilder("{\"events\":[");
+            for (int index = 0; index < pending.size(); index++) {
+                if (index > 0) {
+                    json.append(',');
+                }
+                json.append(pending.get(index).toJson());
+            }
+            json.append("],\"next_seq\":").append(events.lastSequence())
+                    .append(",\"timed_out\":").append(pending.isEmpty()).append('}');
+            return ToolResult.ok("events", json.toString());
+        }));
+    }
+
+    @Override
+    public ToolResult say(UUID companionId, String text) {
+        return runOnServer(ignored -> withCompanion(companionId, companion -> {
+            var owner = companion.getOwner();
+            if (owner instanceof net.minecraft.server.level.ServerPlayer player) {
+                player.sendSystemMessage(net.minecraft.network.chat.Component.literal(text));
+            }
+            return ToolResult.ok("said", "said to owner");
         }));
     }
 
@@ -95,14 +176,10 @@ public final class FabricCompanionBackend implements CompanionTools.CompanionBac
     public ToolResult stop(UUID companionId) {
         return runOnServer(ignored -> withCompanion(companionId, companion -> {
             companion.getNavigation().stop();
+            events.publish(companionId.toString(), "operation_stopped",
+                    "{\"reason\":\"agent_requested\"}");
             return ToolResult.ok("stopped", "stopped " + companionId);
         }));
-    }
-
-    @Override
-    public ToolResult wait(UUID companionId, int ticks) {
-        return runOnServer(ignored -> withCompanion(companionId,
-                companion -> ToolResult.ok("waited", "waited " + ticks + " ticks")));
     }
 
     private CompanionEntity requireCompanion(UUID companionId) {

@@ -191,21 +191,36 @@ $env:PATH="$env:JAVA_HOME\bin;$env:PATH"
 
 验证：
 
-- `:core:test :mcp:test` 共 32 个测试通过（9 core + 23 mcp）。
-- `:fabric:runGameTestServer` → `All 15 required tests passed`。
-- 真实专用服 MCP E2E：`initialize`、`tools/list`（8 个工具、注解正确）、
-  `companion_list`、`unknown_companion`、`invalid_params`、数值下限。
+- `:core:test :mcp:test` 共 41 个测试通过（9 core + 32 mcp）。
+- `:fabric:runGameTestServer` → `All 17 required tests passed`。
+- 真实专用服 MCP E2E：工具数 10、与 `docs/04-mcp-contract.md` 名称一致、
+  `invalid_params`、`unknown_companion`、审计日志无 Token 本体。
 - 全仓 `.\gradlew.bat build` 通过。
 
-尚未完成：
+工具面（与契约文档对齐，共 10 个）：
 
-- `companion_context`（按标签/半径查询附近方块与实体）。
-- 事件长轮询与事件游标。
-- 请求 ID 幂等。
-- Token 作用域、撤销与过期。
-- 审计日志。
+`companion_list`、`companion_state`、`companion_context`、`companion_inventory`、
+`companion_set_behavior`、`companion_move`、`companion_interact`、
+`companion_wait_events`、`companion_say`、`companion_stop`。
+
+已实现：
+
+- 事件总线 `EventBus`：单调递增序号、保留窗口、游标过期报 `event_cursor_expired`。
+- `behavior_changed` 与 `operation_stopped` 事件。
+- `TokenScope`：read-only 与 full 两档；写工具越权返回 `scope_denied`。
+  `TLMM_MCP_READ_ONLY=1` 切换。
+- `AuditLog`：只写 request id、token 摘要、工具名、companion、状态、code、耗时。
+- 请求幂等：相同 `request_id` 重放不二次执行。
+- `docs/mcp-development-setup.md`：Token 生成、启动、连接与冒烟步骤。
+
+尚未完成（M2 收尾）：
+
+- `companion_context` 目前只按半径统计方块，尚未支持标签与实体过滤。
+- `companion_interact` 只读取目标方块，尚未真正右键交互。
+- `companion_inventory` 只读单槽，尚未支持 `action` 与装备槽。
+- 事件长轮询是即时返回，尚未真正挂起等待 `timeout_seconds`。
+- Token 按同伴授权、撤销与过期属于 M3。
 - 客户端 MCP 连接状态显示。
-- `.codex/config.toml` 连接示例与 Token 生成流程。
 - `docs/validation/M2.md` 与 M2 完成提交。
 
 ## 恢复工作

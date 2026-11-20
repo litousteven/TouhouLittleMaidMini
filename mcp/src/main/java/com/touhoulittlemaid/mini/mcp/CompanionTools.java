@@ -49,6 +49,9 @@ public final class CompanionTools {
         /** Right-click a block position. */
         ToolResult interact(UUID companionId, int x, int y, int z);
 
+        /** Nearby blocks within a radius, for observation. */
+        ToolResult context(UUID companionId, int radius);
+
         /** Read one inventory slot. */
         ToolResult inventory(UUID companionId, int slot);
 
@@ -58,8 +61,11 @@ public final class CompanionTools {
         /** Stop the current operation. */
         ToolResult stop(UUID companionId);
 
-        /** Wait for the given number of ticks. */
-        ToolResult wait(UUID companionId, int ticks);
+        /** Long-poll events after a cursor. */
+        ToolResult waitEvents(UUID companionId, long afterSequence, int timeoutSeconds, int maxEvents);
+
+        /** Say a short line to the owner. */
+        ToolResult say(UUID companionId, String text);
     }
 
     private CompanionTools() {
@@ -150,6 +156,23 @@ public final class CompanionTools {
                 });
 
         registry.register(new ToolSpec(
+                        "companion_context",
+                        "Read nearby context",
+                        "Lists nearby block IDs within a radius so the agent can decide "
+                                + "what to act on.",
+                        ordered(
+                                "companion_id", ToolParameter.requiredString("Companion UUID"),
+                                "radius", ToolParameter.requiredIntegerWithMinimum("Block radius", 1.0D)),
+                        true, false, true),
+                arguments -> {
+                    Optional<UUID> id = companionId(arguments);
+                    if (id.isEmpty()) {
+                        return ToolResult.rejected("invalid_params", "companion_id must be a UUID");
+                    }
+                    return backend.context(id.get(), intValue(arguments, "radius"));
+                });
+
+        registry.register(new ToolSpec(
                         "companion_inventory",
                         "Read an inventory slot",
                         "Reads one backpack slot of a companion.",
@@ -189,19 +212,54 @@ public final class CompanionTools {
                 });
 
         registry.register(new ToolSpec(
-                        "companion_wait",
-                        "Wait",
-                        "Waits for the given number of server ticks.",
+                        "companion_wait_events",
+                        "Wait for events",
+                        "Long-polls behaviour and operation events after a cursor.",
                         ordered(
                                 "companion_id", ToolParameter.requiredString("Companion UUID"),
-                                "ticks", ToolParameter.requiredIntegerWithMinimum("Ticks to wait", 1.0D)),
+                                "after_seq", ToolParameter.requiredIntegerWithMinimum(
+                                        "Last consumed event sequence", 0.0D),
+                                "timeout_seconds", ToolParameter.optionalIntegerWithMinimum(
+                                        "Long-poll timeout in seconds", 0.0D),
+                                "max_events", ToolParameter.optionalIntegerWithMinimum(
+                                        "Maximum events to return", 1.0D)),
+                        true, false, false),
+                arguments -> {
+                    Optional<UUID> id = companionId(arguments);
+                    if (id.isEmpty()) {
+                        return ToolResult.rejected("invalid_params", "companion_id must be a UUID");
+                    }
+                    int timeoutSeconds = arguments.containsKey("timeout_seconds")
+                            ? intValue(arguments, "timeout_seconds") : 0;
+                    int maxEvents = arguments.containsKey("max_events")
+                            ? intValue(arguments, "max_events") : 20;
+                    return backend.waitEvents(id.get(),
+                            intValue(arguments, "after_seq"), timeoutSeconds, maxEvents);
+                });
+
+        registry.register(new ToolSpec(
+                        "companion_say",
+                        "Say something",
+                        "Shows a short line to the owner.",
+                        ordered(
+                                "companion_id", ToolParameter.requiredString("Companion UUID"),
+                                "text", ToolParameter.requiredString("Line to show, at most 280 characters")),
                         false, false, false),
                 arguments -> {
                     Optional<UUID> id = companionId(arguments);
                     if (id.isEmpty()) {
                         return ToolResult.rejected("invalid_params", "companion_id must be a UUID");
                     }
-                    return backend.wait(id.get(), intValue(arguments, "ticks"));
+                    Object raw = arguments.get("text");
+                    String text = raw instanceof String value ? value : "";
+                    if (text.isBlank()) {
+                        return ToolResult.rejected("invalid_params", "text must not be blank");
+                    }
+                    if (text.length() > 280) {
+                        return ToolResult.rejected("invalid_params",
+                                "text must be at most 280 characters");
+                    }
+                    return backend.say(id.get(), text);
                 });
 
         registry.register(new ToolSpec(
