@@ -10,6 +10,7 @@ public final class TlmmFabricClient implements ClientModInitializer {
 
     @Override
     public void onInitializeClient() {
+        EntityRenderers.register(FabricContent.COMPANION, DebugCompanionRenderer::new);
         EntityRenderers.register(FabricContent.DEBUG_COMPANION, DebugCompanionRenderer::new);
     }
 }

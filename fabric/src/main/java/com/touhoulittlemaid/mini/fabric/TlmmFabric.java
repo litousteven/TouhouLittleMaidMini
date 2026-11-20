@@ -1,6 +1,7 @@
 package com.touhoulittlemaid.mini.fabric;
 
 import com.touhoulittlemaid.mini.core.PlatformState;
+import com.touhoulittlemaid.mini.fabric.command.CompanionCommands;
 import com.touhoulittlemaid.mini.fabric.content.FabricContent;
 import com.touhoulittlemaid.mini.fabric.persistence.M0SavedData;
 import com.touhoulittlemaid.mini.mcp.McpServer;
@@ -27,6 +28,7 @@ public final class TlmmFabric implements ModInitializer {
     @Override
     public void onInitialize() {
         FabricContent.register();
+        CompanionCommands.register();
         ServerLifecycleEvents.SERVER_STARTED.register(server -> {
             int saveVersion = M0SavedData.get(server).value();
             LOGGER.info("[m0] saved-data baseline value={}", saveVersion);

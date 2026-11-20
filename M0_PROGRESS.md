@@ -149,6 +149,29 @@ $env:PATH="$env:JAVA_HOME\bin;$env:PATH"
 - 检查 `git status`、完整 diff、`git diff --check`。
 - 使用 Conventional Commit 创建 `M0` 完成提交。
 
+## M1 进度（进行中）
+
+已完成并验证：
+
+- `core` 新增 `LocalBehavior`（stay/follow/guard）、`CompanionInventoryLayout`（9 格背包 +
+  6 格装备）、`CompanionSnapshot`，含 9 个纯 JVM 单测。
+- `CompanionEntity`：owner、名字、UUID、本地行为、home（维度 + 坐标）、9 格背包、
+  跟随/待机目标、`canAttack` 排除 owner。
+- 背包持久化按槽位显式存取。原用 `storeAsItemList`/`fromItemList` 会压缩列表并
+  丢失槽位索引，已被 GameTest 捕获并修复。
+- `tlmm summon|remove|rename|home|behavior` 命令；删除前阻断非空背包。
+- GameTest 共 10 个全部通过（3 个 M0 + 7 个 M1）。
+- 真实客户端截图确认 `tlmm:companion` 渲染。
+
+尚未完成：
+
+- `guard` 行为的具体目标与自卫逻辑。
+- 生命、饥饿、进食与安全反射。
+- 装备槽实际实现（目前只有布局常量）。
+- 右键管理界面。
+- 服务端配置与服务端/客户端同步。
+- `docs/validation/M1.md` 与 M1 完成提交。
+
 ## 恢复工作
 
 重启后先读取本文件。Windows 下从仓库根目录执行：
