@@ -26,7 +26,9 @@ dependencies {
     implementation project(':core')
     implementation project(':mcp')
     compileOnly fabricApi.module('fabric-gametest-api-v1', fabric_version)
+    compileOnly fabricApi.module('fabric-client-gametest-api-v1', fabric_version)
     localRuntime fabricApi.module('fabric-gametest-api-v1', fabric_version)
+    localRuntime fabricApi.module('fabric-client-gametest-api-v1', fabric_version)
 }
 
 sourceSets {
@@ -62,6 +64,14 @@ loom {
             ideConfigGenerated(false)
             runDir('../run/gameTestServer')
             vmArg('-Dfabric-api.gametest')
+        }
+        clientGametest {
+            client()
+            setConfigName('Fabric Client GameTest')
+            ideConfigGenerated(false)
+            runDir('../run/clientGametest')
+            vmArg('-Dfabric.client.gametest')
+            vmArg("-Dfabric.client.gametest.modid=${mod_id}")
         }
     }
 }

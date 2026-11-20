@@ -10,7 +10,8 @@
   "entrypoints": {
     "main": ["com.touhoulittlemaid.mini.fabric.TlmmFabric"],
     "client": ["com.touhoulittlemaid.mini.fabric.TlmmFabricClient"],
-    "fabric-gametest": ["com.touhoulittlemaid.mini.fabric.gametest.M0GameTests"]
+    "fabric-gametest": ["com.touhoulittlemaid.mini.fabric.gametest.M0GameTests"],
+    "fabric-client-gametest": ["com.touhoulittlemaid.mini.fabric.gametest.M0ClientGameTests"]
   },
   "depends": {
     "fabricloader": ">=${fabric_loader_version}",
