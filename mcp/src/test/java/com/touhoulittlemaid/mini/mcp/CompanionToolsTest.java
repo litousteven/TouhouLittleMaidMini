@@ -29,6 +29,7 @@ class CompanionToolsTest {
         private int[] lastMove;
         private UUID lastStop;
         private String said;
+        private com.touhoulittlemaid.mini.core.ContextQuery lastContext;
 
         @Override
         public List<CompanionSnapshot> listCompanions() {
@@ -57,7 +58,9 @@ class CompanionToolsTest {
         }
 
         @Override
-        public ToolResult context(UUID companionId, int radius) {
+        public ToolResult context(UUID companionId,
+                com.touhoulittlemaid.mini.core.ContextQuery query) {
+            lastContext = query;
             return ToolResult.ok("context", "{\"scanned\":1,\"blocks\":{}}");
         }
 
@@ -228,6 +231,52 @@ class CompanionToolsTest {
                 "behavior", "guard"));
 
         assertEquals(LocalBehavior.GUARD, backend.lastBehavior);
+    }
+
+    @Test
+    void contextFiltersAndCategoryReachTheBody() {
+        RecordingBackend backend = new RecordingBackend();
+        ToolResult result = registry(backend).invoke("companion_context", Map.of(
+                "companion_id", COMPANION.toString(),
+                "category", "blocks",
+                "radius", 12,
+                "tags", List.of("minecraft:crops"),
+                "block_ids", List.of("minecraft:wheat", "minecraft:carrots"),
+                "max_results", 24));
+
+        assertEquals(ToolResult.Status.OK, result.status());
+        var query = backend.lastContext;
+        assertEquals(com.touhoulittlemaid.mini.core.ContextCategory.BLOCKS, query.category());
+        assertEquals(12, query.radius());
+        assertEquals(List.of("minecraft:crops"), query.tags());
+        assertEquals(List.of("minecraft:wheat", "minecraft:carrots"), query.blockIds());
+        assertEquals(24, query.maxResults());
+    }
+
+    @Test
+    void contextDefaultsToBlocksAndRejectsUnknownCategory() {
+        RecordingBackend backend = new RecordingBackend();
+        ToolRegistry registry = registry(backend);
+        registry.invoke("companion_context", Map.of("companion_id", COMPANION.toString()));
+        assertEquals(com.touhoulittlemaid.mini.core.ContextCategory.BLOCKS,
+                backend.lastContext.category());
+        assertEquals(com.touhoulittlemaid.mini.core.ContextQuery.DEFAULT_RADIUS,
+                backend.lastContext.radius());
+
+        ToolResult invalid = registry.invoke("companion_context", Map.of(
+                "companion_id", COMPANION.toString(),
+                "category", "farm"));
+        assertEquals(ToolResult.Status.REJECTED, invalid.status());
+        assertEquals("invalid_params", invalid.code());
+    }
+
+    @Test
+    void contextRejectsArrayParametersOfTheWrongElementType() {
+        ToolResult result = registry(new RecordingBackend()).invoke("companion_context", Map.of(
+                "companion_id", COMPANION.toString(),
+                "tags", List.of(1, 2)));
+        assertEquals(ToolResult.Status.REJECTED, result.status());
+        assertEquals("invalid_params", result.code());
     }
 
     @Test

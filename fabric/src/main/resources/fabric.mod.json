@@ -15,7 +15,8 @@
       "com.touhoulittlemaid.mini.fabric.gametest.M1CompanionGameTests",
       "com.touhoulittlemaid.mini.fabric.gametest.M1CommandGameTests",
       "com.touhoulittlemaid.mini.fabric.gametest.M1BodyGameTests",
-      "com.touhoulittlemaid.mini.fabric.gametest.M2ToolPipelineGameTests"
+      "com.touhoulittlemaid.mini.fabric.gametest.M2ToolPipelineGameTests",
+      "com.touhoulittlemaid.mini.fabric.gametest.M3ContextGameTests"
     ],
     "fabric-client-gametest": [
       "com.touhoulittlemaid.mini.fabric.gametest.CompanionClientGameTests"

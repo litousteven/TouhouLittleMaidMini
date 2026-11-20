@@ -31,6 +31,7 @@ public record ToolSpec(
     /** JSON type used by the tool input schema. */
     public enum ParameterType {
         STRING("string"),
+        STRING_ARRAY("array"),
         INTEGER("integer"),
         NUMBER("number"),
         BOOLEAN("boolean");
@@ -89,6 +90,22 @@ public record ToolSpec(
 
         public static ToolParameter requiredNumberWithMinimum(String description, double minimum) {
             return new ToolParameter(ParameterType.NUMBER, description, true, minimum);
+        }
+
+        public static ToolParameter optionalString(String description) {
+            return optional(ParameterType.STRING, description);
+        }
+
+        public static ToolParameter optionalStringArray(String description) {
+            return optional(ParameterType.STRING_ARRAY, description);
+        }
+
+        public static ToolParameter optionalNumber(String description) {
+            return optional(ParameterType.NUMBER, description);
+        }
+
+        public static ToolParameter optionalBoolean(String description) {
+            return optional(ParameterType.BOOLEAN, description);
         }
     }
 }

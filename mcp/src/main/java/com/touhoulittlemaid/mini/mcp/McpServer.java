@@ -222,6 +222,11 @@ public final class McpServer implements AutoCloseable {
             if (parameter.numericMinimum() != null) {
                 property.addProperty("minimum", parameter.numericMinimum());
             }
+            if (parameter.type() == ToolSpec.ParameterType.STRING_ARRAY) {
+                JsonObject items = new JsonObject();
+                items.addProperty("type", ToolSpec.ParameterType.STRING.jsonName());
+                property.add("items", items);
+            }
             properties.add(entry.getKey(), property);
             if (parameter.required()) {
                 required.add(entry.getKey());
@@ -364,6 +369,21 @@ public final class McpServer implements AutoCloseable {
                 } else {
                     arguments.put(entry.getKey(), primitive.getAsString());
                 }
+            } else if (value.isJsonArray()) {
+                java.util.List<Object> list = new java.util.ArrayList<>();
+                for (JsonElement element : value.getAsJsonArray()) {
+                    if (element != null && element.isJsonPrimitive()) {
+                        var primitive = element.getAsJsonPrimitive();
+                        if (primitive.isBoolean()) {
+                            list.add(primitive.getAsBoolean());
+                        } else if (primitive.isNumber()) {
+                            list.add(decodeNumber(primitive));
+                        } else {
+                            list.add(primitive.getAsString());
+                        }
+                    }
+                }
+                arguments.put(entry.getKey(), list);
             } else {
                 arguments.put(entry.getKey(), value.toString());
             }

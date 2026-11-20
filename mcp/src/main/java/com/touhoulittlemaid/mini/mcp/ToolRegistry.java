@@ -107,6 +107,8 @@ public final class ToolRegistry {
     private static boolean matchesType(ToolSpec.ParameterType type, Object value) {
         return switch (type) {
             case STRING -> value instanceof String;
+            case STRING_ARRAY -> value instanceof java.util.List<?> list
+                    && list.stream().allMatch(String.class::isInstance);
             case INTEGER -> value instanceof Integer || value instanceof Long;
             case NUMBER -> value instanceof Number;
             case BOOLEAN -> value instanceof Boolean;

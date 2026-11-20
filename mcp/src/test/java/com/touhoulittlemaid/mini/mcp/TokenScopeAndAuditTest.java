@@ -168,7 +168,8 @@ class TokenScopeAndAuditTest {
         }
 
         @Override
-        public com.touhoulittlemaid.mini.core.ToolResult context(java.util.UUID id, int radius) {
+        public com.touhoulittlemaid.mini.core.ToolResult context(java.util.UUID id,
+                com.touhoulittlemaid.mini.core.ContextQuery query) {
             return com.touhoulittlemaid.mini.core.ToolResult.ok("context", "{}");
         }
 

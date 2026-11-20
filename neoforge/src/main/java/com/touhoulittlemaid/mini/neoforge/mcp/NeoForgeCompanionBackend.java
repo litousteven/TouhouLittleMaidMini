@@ -41,7 +41,8 @@ public final class NeoForgeCompanionBackend implements CompanionTools.CompanionB
     }
 
     @Override
-    public ToolResult context(UUID companionId, int radius) {
+    public ToolResult context(UUID companionId,
+            com.touhoulittlemaid.mini.core.ContextQuery query) {
         return unavailable();
     }
 

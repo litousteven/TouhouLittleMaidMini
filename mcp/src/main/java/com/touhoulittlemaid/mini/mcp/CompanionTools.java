@@ -2,6 +2,8 @@ package com.touhoulittlemaid.mini.mcp;
 
 import com.touhoulittlemaid.mini.core.ActionKind;
 import com.touhoulittlemaid.mini.core.CompanionSnapshot;
+import com.touhoulittlemaid.mini.core.ContextCategory;
+import com.touhoulittlemaid.mini.core.ContextQuery;
 import com.touhoulittlemaid.mini.core.LocalBehavior;
 import com.touhoulittlemaid.mini.core.ToolResult;
 import com.touhoulittlemaid.mini.core.ToolSpec;
@@ -49,8 +51,8 @@ public final class CompanionTools {
         /** Right-click a block position. */
         ToolResult interact(UUID companionId, int x, int y, int z);
 
-        /** Nearby blocks within a radius, for observation. */
-        ToolResult context(UUID companionId, int radius);
+        /** Bounded observation of one context category. */
+        ToolResult context(UUID companionId, ContextQuery query);
 
         /** Read one inventory slot. */
         ToolResult inventory(UUID companionId, int slot);
@@ -158,18 +160,47 @@ public final class CompanionTools {
         registry.register(new ToolSpec(
                         "companion_context",
                         "Read nearby context",
-                        "Lists nearby block IDs within a radius so the agent can decide "
-                                + "what to act on.",
+                        "Loads one bounded context category: self, owner, inventory, blocks, "
+                                + "entities, containers or hazards. Blocks and entities can be "
+                                + "filtered by tags and IDs.",
                         ordered(
                                 "companion_id", ToolParameter.requiredString("Companion UUID"),
-                                "radius", ToolParameter.requiredIntegerWithMinimum("Block radius", 1.0D)),
+                                "category", ToolParameter.optionalString(
+                                        "self, owner, inventory, blocks, entities, containers or hazards"),
+                                "radius", ToolParameter.optionalIntegerWithMinimum("Block radius", 1.0D),
+                                "tags", ToolParameter.optionalStringArray(
+                                        "Block or entity tags, for example minecraft:crops"),
+                                "block_ids", ToolParameter.optionalStringArray(
+                                        "Exact block IDs to include"),
+                                "entity_types", ToolParameter.optionalStringArray(
+                                        "Exact entity type IDs to include"),
+                                "max_results", ToolParameter.optionalIntegerWithMinimum(
+                                        "Maximum returned entries", 1.0D)),
                         true, false, true),
                 arguments -> {
                     Optional<UUID> id = companionId(arguments);
                     if (id.isEmpty()) {
                         return ToolResult.rejected("invalid_params", "companion_id must be a UUID");
                     }
-                    return backend.context(id.get(), intValue(arguments, "radius"));
+                    ContextCategory category;
+                    try {
+                        category = ContextCategory.fromId(
+                                stringValue(arguments, "category", ContextCategory.BLOCKS.id()));
+                    } catch (IllegalArgumentException exception) {
+                        return ToolResult.rejected("invalid_params",
+                                "category must be self, owner, inventory, blocks, entities, "
+                                        + "containers or hazards");
+                    }
+                    int radius = arguments.containsKey("radius")
+                            ? intValue(arguments, "radius") : ContextQuery.DEFAULT_RADIUS;
+                    int maxResults = arguments.containsKey("max_results")
+                            ? intValue(arguments, "max_results") : ContextQuery.DEFAULT_MAX_RESULTS;
+                    ContextQuery query = new ContextQuery(category, radius,
+                            stringList(arguments, "tags"),
+                            stringList(arguments, "block_ids"),
+                            stringList(arguments, "entity_types"),
+                            maxResults);
+                    return backend.context(id.get(), query);
                 });
 
         registry.register(new ToolSpec(
@@ -334,6 +365,26 @@ public final class CompanionTools {
             return number.intValue();
         }
         return 0;
+    }
+
+    private static String stringValue(Map<String, Object> arguments, String name,
+            String fallback) {
+        Object raw = arguments.get(name);
+        return raw instanceof String value ? value : fallback;
+    }
+
+    private static java.util.List<String> stringList(Map<String, Object> arguments, String name) {
+        Object raw = arguments.get(name);
+        if (!(raw instanceof java.util.List<?> list)) {
+            return java.util.List.of();
+        }
+        java.util.List<String> values = new java.util.ArrayList<>(list.size());
+        for (Object value : list) {
+            if (value instanceof String text && !text.isBlank()) {
+                values.add(text);
+            }
+        }
+        return values;
     }
 
     private static Map<String, ToolSpec.ToolParameter> ordered(Object... pairs) {

@@ -84,6 +84,29 @@ class McpServerTest {
     }
 
     @Test
+    void contextSchemaExposesArrayFiltersAndOptionalRadius() throws Exception {
+        server = start();
+        JsonObject tools = call(endpoint(), request(8, "tools/list", new JsonObject()));
+        JsonArray list = tools.getAsJsonObject("result").getAsJsonArray("tools");
+
+        JsonObject context = null;
+        for (var element : list) {
+            if ("companion_context".equals(element.getAsJsonObject().get("name").getAsString())) {
+                context = element.getAsJsonObject();
+            }
+        }
+        assertTrue(context != null, "companion_context must be listed");
+
+        JsonObject schema = context.getAsJsonObject("inputSchema");
+        JsonObject properties = schema.getAsJsonObject("properties");
+        assertEquals("array", properties.getAsJsonObject("tags").get("type").getAsString());
+        assertEquals("string", properties.getAsJsonObject("tags")
+                .getAsJsonObject("items").get("type").getAsString());
+        assertEquals(1, schema.getAsJsonArray("required").size(),
+                "only companion_id is required");
+    }
+
+    @Test
     void validCallReturnsStructuredResult() throws Exception {
         server = start();
         JsonObject params = new JsonObject();
@@ -271,7 +294,8 @@ class McpServerTest {
         }
 
         @Override
-        public ToolResult context(UUID companionId, int radius) {
+        public ToolResult context(UUID companionId,
+                com.touhoulittlemaid.mini.core.ContextQuery query) {
             return ToolResult.ok("context", "{\"scanned\":1,\"blocks\":{}}");
         }
 

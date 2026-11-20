@@ -1,9 +1,12 @@
 package com.touhoulittlemaid.mini.fabric.mcp;
 
 import com.touhoulittlemaid.mini.core.CompanionSnapshot;
+import com.touhoulittlemaid.mini.core.ContextQuery;
 import com.touhoulittlemaid.mini.core.LocalBehavior;
 import com.touhoulittlemaid.mini.core.ToolResult;
+import com.touhoulittlemaid.mini.fabric.config.CompanionConfigs;
 import com.touhoulittlemaid.mini.fabric.entity.CompanionEntity;
+import com.touhoulittlemaid.mini.fabric.runtime.CompanionRuntimeState;
 import com.touhoulittlemaid.mini.mcp.CompanionTools;
 
 import java.util.List;
@@ -15,7 +18,10 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.function.Function;
 
+import net.minecraft.core.registries.Registries;
+import net.minecraft.resources.Identifier;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.tags.TagKey;
 import net.minecraft.world.item.ItemStack;
 
 /**
@@ -113,43 +119,468 @@ public final class FabricCompanionBackend implements CompanionTools.CompanionBac
     }
 
     @Override
-    public ToolResult context(UUID companionId, int radius) {
+    public ToolResult context(UUID companionId, ContextQuery query) {
         return runOnServer(ignored -> withCompanion(companionId, companion -> {
-            var level = companion.level();
-            var origin = companion.blockPosition();
-            java.util.Map<String, Integer> counts = new java.util.TreeMap<>();
-            int scanned = 0;
-            for (int dx = -radius; dx <= radius; dx++) {
-                for (int dy = -radius; dy <= radius; dy++) {
-                    for (int dz = -radius; dz <= radius; dz++) {
-                        var pos = origin.offset(dx, dy, dz);
-                        if (!level.isLoaded(pos)) {
-                            continue;
-                        }
-                        scanned++;
-                        var state = level.getBlockState(pos);
-                        if (state.isAir()) {
-                            continue;
-                        }
-                        String id = state.getBlock().builtInRegistryHolder().key()
-                                .identifier().toString();
-                        counts.merge(id, 1, Integer::sum);
+            int radius = CompanionConfigs.current().clampedRadius(query.radius());
+            int maxResults = query.maxResults();
+            try {
+                return switch (query.category()) {
+                    case SELF -> ToolResult.ok("context", selfJson(companion, radius));
+                    case OWNER -> ToolResult.ok("context", ownerJson(companion));
+                    case INVENTORY -> ToolResult.ok("context", inventoryJson(companion));
+                    case BLOCKS -> ToolResult.ok("context",
+                            blocksJson(companion, query, radius, maxResults));
+                    case ENTITIES -> ToolResult.ok("context",
+                            entitiesJson(companion, query, radius, maxResults));
+                    case CONTAINERS -> ToolResult.ok("context",
+                            containersJson(companion, query, radius, maxResults));
+                    case HAZARDS -> ToolResult.ok("context",
+                            hazardsJson(companion, radius, maxResults));
+                };
+            } catch (IllegalArgumentException exception) {
+                return ToolResult.rejected("invalid_params", exception.getMessage());
+            }
+        }));
+    }
+
+    private static String selfJson(CompanionEntity companion, int radius) {
+        StringBuilder json = new StringBuilder("{\"category\":\"self\"");
+        stringField(json, "behavior", companion.behavior().id());
+        numberField(json, "health", companion.getHealth());
+        numberField(json, "max_health", companion.getMaxHealth());
+        intField(json, "hunger", companion.hunger().level());
+        intField(json, "radius", radius);
+        booleanField(json, "home_set", companion.hasHome());
+        booleanField(json, "mcp_connected", CompanionRuntimeState.mcpConnected());
+        json.append(",\"dimension\":\"")
+                .append(escape(companion.level().dimension().identifier().toString()))
+                .append('"');
+        json.append(",\"position\":");
+        entityPosition(json, companion);
+        json.append(",\"equipment\":[");
+        boolean first = true;
+        for (int slot = 0; slot < companion.equipment().getContainerSize(); slot++) {
+            ItemStack stack = companion.equipment().getItem(slot);
+            if (stack.isEmpty()) {
+                continue;
+            }
+            if (!first) {
+                json.append(',');
+            }
+            first = false;
+            json.append("{\"slot\":\"")
+                    .append(escape(CompanionEntity.equipmentSlotAt(slot).getName()))
+                    .append("\",\"item\":\"").append(escape(itemId(stack)))
+                    .append("\",\"count\":").append(stack.getCount()).append('}');
+        }
+        return json.append("]}").toString();
+    }
+
+    private static String ownerJson(CompanionEntity companion) {
+        net.minecraft.world.entity.EntityReference<net.minecraft.world.entity.LivingEntity> reference =
+                companion.getOwnerReference();
+        if (reference == null) {
+            return "{\"category\":\"owner\",\"online\":false}";
+        }
+        StringBuilder json = new StringBuilder("{\"category\":\"owner\",\"owner_id\":\"")
+                .append(reference.getUUID()).append('"');
+        net.minecraft.world.entity.LivingEntity owner = companion.getOwner();
+        if (owner == null) {
+            return json.append(",\"online\":false}").toString();
+        }
+        json.append(",\"online\":true");
+        numberField(json, "health", owner.getHealth());
+        numberField(json, "max_health", owner.getMaxHealth());
+        json.append(",\"dimension\":\"")
+                .append(escape(owner.level().dimension().identifier().toString())).append('"');
+        json.append(",\"position\":");
+        entityPosition(json, owner);
+        numberField(json, "distance", Math.sqrt(companion.distanceToSqr(owner)));
+        booleanField(json, "hurt", owner.getHealth() < owner.getMaxHealth());
+        return json.append('}').toString();
+    }
+
+    private static String inventoryJson(CompanionEntity companion) {
+        StringBuilder json = new StringBuilder("{\"category\":\"inventory\",\"backpack\":[");
+        boolean first = true;
+        for (int slot = 0; slot < companion.backpack().getContainerSize(); slot++) {
+            ItemStack stack = companion.backpack().getItem(slot);
+            if (stack.isEmpty()) {
+                continue;
+            }
+            if (!first) {
+                json.append(',');
+            }
+            first = false;
+            json.append("{\"slot\":").append(slot)
+                    .append(",\"item\":\"").append(escape(itemId(stack)))
+                    .append("\",\"count\":").append(stack.getCount()).append('}');
+        }
+        json.append("],\"equipment\":[");
+        first = true;
+        for (int slot = 0; slot < companion.equipment().getContainerSize(); slot++) {
+            ItemStack stack = companion.equipment().getItem(slot);
+            if (stack.isEmpty()) {
+                continue;
+            }
+            if (!first) {
+                json.append(',');
+            }
+            first = false;
+            json.append("{\"slot\":\"")
+                    .append(escape(CompanionEntity.equipmentSlotAt(slot).getName()))
+                    .append("\",\"item\":\"").append(escape(itemId(stack)))
+                    .append("\",\"count\":").append(stack.getCount()).append('}');
+        }
+        json.append("],\"free_backpack_slots\":")
+                .append(Math.max(0, com.touhoulittlemaid.mini.core.CompanionInventoryLayout
+                        .BACKPACK_SLOTS - companion.backpackUsedSlots()))
+                .append('}');
+        return json.toString();
+    }
+
+    private static String blocksJson(CompanionEntity companion, ContextQuery query,
+            int radius, int maxResults) {
+        java.util.List<TagKey<net.minecraft.world.level.block.Block>> tags =
+                query.tags().stream().map(FabricCompanionBackend::blockTag).toList();
+        java.util.Set<String> ids = java.util.Set.copyOf(query.blockIds());
+        var level = companion.level();
+        var origin = companion.blockPosition();
+        int vertical = Math.min(radius, 8);
+        int scanned = 0;
+        int unloaded = 0;
+        int matched = 0;
+        boolean truncated = false;
+        StringBuilder entries = new StringBuilder();
+
+        outer:
+        for (int dx = -radius; dx <= radius; dx++) {
+            for (int dz = -radius; dz <= radius; dz++) {
+                if (dx * dx + dz * dz > radius * radius) {
+                    continue;
+                }
+                for (int dy = -vertical; dy <= vertical; dy++) {
+                    var pos = origin.offset(dx, dy, dz);
+                    if (!level.isLoaded(pos)) {
+                        unloaded++;
+                        continue;
+                    }
+                    scanned++;
+                    var state = level.getBlockState(pos);
+                    if (state.isAir()) {
+                        continue;
+                    }
+                    String id = blockId(state);
+                    if (!matchesBlock(state, id, ids, tags)) {
+                        continue;
+                    }
+                    if (matched >= maxResults) {
+                        truncated = true;
+                        break outer;
+                    }
+                    if (matched > 0) {
+                        entries.append(',');
+                    }
+                    appendBlockEntry(entries, companion, state, id, pos);
+                    matched++;
+                }
+            }
+        }
+
+        return new StringBuilder("{\"category\":\"blocks\",\"radius\":").append(radius)
+                .append(",\"scanned\":").append(scanned)
+                .append(",\"unloaded\":").append(unloaded)
+                .append(",\"partial\":").append(unloaded > 0)
+                .append(",\"matched\":").append(matched)
+                .append(",\"truncated\":").append(truncated)
+                .append(",\"blocks\":[").append(entries).append("]}").toString();
+    }
+
+    private static String entitiesJson(CompanionEntity companion, ContextQuery query,
+            int radius, int maxResults) {
+        var level = companion.level();
+        var box = companion.getBoundingBox().inflate(radius);
+        java.util.List<net.minecraft.world.entity.LivingEntity> entities =
+                new java.util.ArrayList<>(level.getEntitiesOfClass(
+                        net.minecraft.world.entity.LivingEntity.class, box,
+                        entity -> entity != companion));
+        if (!query.entityTypes().isEmpty()) {
+            entities.removeIf(entity -> !query.entityTypes().contains(entityTypeId(entity)));
+        }
+        entities.sort(java.util.Comparator.comparingDouble(companion::distanceToSqr));
+        boolean truncated = entities.size() > maxResults;
+        int limit = Math.min(maxResults, entities.size());
+
+        StringBuilder entries = new StringBuilder();
+        for (int index = 0; index < limit; index++) {
+            if (index > 0) {
+                entries.append(',');
+            }
+            var entity = entities.get(index);
+            entries.append("{\"uuid\":\"").append(entity.getUUID()).append('"');
+            stringField(entries, "type", entityTypeId(entity));
+            if (entity.hasCustomName() && entity.getCustomName() != null) {
+                stringField(entries, "name", entity.getCustomName().getString());
+            }
+            entries.append(",\"position\":");
+            entityPosition(entries, entity);
+            numberField(entries, "distance", Math.sqrt(companion.distanceToSqr(entity)));
+            numberField(entries, "health", entity.getHealth());
+            booleanField(entries, "hostile",
+                    entity instanceof net.minecraft.world.entity.monster.Monster);
+            if (entity instanceof net.minecraft.world.entity.OwnableEntity ownable
+                    && ownable.getOwnerReference() != null) {
+                stringField(entries, "owner_id", ownable.getOwnerReference().getUUID().toString());
+            }
+            entries.append('}');
+        }
+        return new StringBuilder("{\"category\":\"entities\",\"radius\":").append(radius)
+                .append(",\"matched\":").append(entities.size())
+                .append(",\"truncated\":").append(truncated)
+                .append(",\"entities\":[").append(entries).append("]}").toString();
+    }
+
+    private static String containersJson(CompanionEntity companion, ContextQuery query,
+            int radius, int maxResults) {
+        var level = companion.level();
+        var origin = companion.blockPosition();
+        int vertical = Math.min(radius, 8);
+        StringBuilder entries = new StringBuilder();
+        int matched = 0;
+        int unloaded = 0;
+        outer:
+        for (int dx = -radius; dx <= radius; dx++) {
+            for (int dz = -radius; dz <= radius; dz++) {
+                if (dx * dx + dz * dz > radius * radius) {
+                    continue;
+                }
+                for (int dy = -vertical; dy <= vertical; dy++) {
+                    var pos = origin.offset(dx, dy, dz);
+                    if (!level.isLoaded(pos)) {
+                        unloaded++;
+                        continue;
+                    }
+                    var state = level.getBlockState(pos);
+                    if (state.isAir() || !state.hasBlockEntity()) {
+                        continue;
+                    }
+                    if (!(level.getBlockEntity(pos) instanceof net.minecraft.world.Container)) {
+                        continue;
+                    }
+                    if (matched >= maxResults) {
+                        break outer;
+                    }
+                    if (matched > 0) {
+                        entries.append(',');
+                    }
+                    entries.append("{\"id\":\"").append(escape(blockId(state)))
+                            .append("\",\"pos\":");
+                    blockPosition(entries, pos);
+                    numberField(entries, "distance", Math.sqrt(companion.distanceToSqr(
+                            pos.getX() + 0.5D, pos.getY() + 0.5D, pos.getZ() + 0.5D)));
+                    entries.append(",\"contents\":\"not_read\"}");
+                    matched++;
+                }
+            }
+        }
+        return new StringBuilder("{\"category\":\"containers\",\"radius\":").append(radius)
+                .append(",\"unloaded\":").append(unloaded)
+                .append(",\"partial\":").append(unloaded > 0)
+                .append(",\"containers\":[").append(entries).append("]}").toString();
+    }
+
+    private static String hazardsJson(CompanionEntity companion, int radius, int maxResults) {
+        var level = companion.level();
+        var origin = companion.blockPosition();
+        int vertical = Math.min(radius, 8);
+        StringBuilder blocks = new StringBuilder();
+        int blockCount = 0;
+        outer:
+        for (int dx = -radius; dx <= radius; dx++) {
+            for (int dz = -radius; dz <= radius; dz++) {
+                if (dx * dx + dz * dz > radius * radius) {
+                    continue;
+                }
+                for (int dy = -vertical; dy <= vertical; dy++) {
+                    var pos = origin.offset(dx, dy, dz);
+                    if (!level.isLoaded(pos)) {
+                        continue;
+                    }
+                    var state = level.getBlockState(pos);
+                    String id = blockId(state);
+                    if (!HAZARD_BLOCKS.contains(id)) {
+                        continue;
+                    }
+                    if (blockCount >= maxResults) {
+                        break outer;
+                    }
+                    if (blockCount > 0) {
+                        blocks.append(',');
+                    }
+                    blocks.append("{\"id\":\"").append(escape(id)).append("\",\"pos\":");
+                    blockPosition(blocks, pos);
+                    numberField(blocks, "distance", Math.sqrt(companion.distanceToSqr(
+                            pos.getX() + 0.5D, pos.getY() + 0.5D, pos.getZ() + 0.5D)));
+                    blocks.append('}');
+                    blockCount++;
+                }
+            }
+        }
+
+        var hostiles = level.getEntitiesOfClass(
+                net.minecraft.world.entity.monster.Monster.class,
+                companion.getBoundingBox().inflate(radius));
+        hostiles.sort(java.util.Comparator.comparingDouble(companion::distanceToSqr));
+        int hostileLimit = Math.min(maxResults, hostiles.size());
+        StringBuilder hostileJson = new StringBuilder();
+        for (int index = 0; index < hostileLimit; index++) {
+            if (index > 0) {
+                hostileJson.append(',');
+            }
+            var entity = hostiles.get(index);
+            hostileJson.append("{\"uuid\":\"").append(entity.getUUID())
+                    .append("\",\"type\":\"").append(escape(entityTypeId(entity)))
+                    .append("\",\"pos\":");
+            entityPosition(hostileJson, entity);
+            numberField(hostileJson, "distance", Math.sqrt(companion.distanceToSqr(entity)));
+            hostileJson.append('}');
+        }
+        return new StringBuilder("{\"category\":\"hazards\",\"radius\":").append(radius)
+                .append(",\"blocks\":[").append(blocks)
+                .append("],\"hostiles\":[").append(hostileJson).append("]}").toString();
+    }
+
+    private static TagKey<net.minecraft.world.level.block.Block> blockTag(String tag) {
+        try {
+            return TagKey.create(Registries.BLOCK, Identifier.parse(tag));
+        } catch (RuntimeException exception) {
+            throw new IllegalArgumentException("Invalid block tag: " + tag);
+        }
+    }
+
+    private static boolean matchesBlock(
+            net.minecraft.world.level.block.state.BlockState state,
+            String id, java.util.Set<String> ids,
+            java.util.List<TagKey<net.minecraft.world.level.block.Block>> tags) {
+        if (!ids.isEmpty() && !ids.contains(id)) {
+            return false;
+        }
+        if (!tags.isEmpty()) {
+            var holder = state.getBlock().builtInRegistryHolder();
+            boolean matched = false;
+            for (TagKey<net.minecraft.world.level.block.Block> tag : tags) {
+                if (holder.is(tag)) {
+                    matched = true;
+                    break;
+                }
+            }
+            if (!matched) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static void appendBlockEntry(StringBuilder json, CompanionEntity companion,
+            net.minecraft.world.level.block.state.BlockState state, String id,
+            net.minecraft.core.BlockPos pos) {
+        json.append("{\"id\":\"").append(escape(id)).append("\",\"pos\":");
+        blockPosition(json, pos);
+        numberField(json, "distance", Math.sqrt(companion.distanceToSqr(
+                pos.getX() + 0.5D, pos.getY() + 0.5D, pos.getZ() + 0.5D)));
+        json.append(",\"properties\":{");
+        boolean first = true;
+        for (var value : state.getValues().toList()) {
+            if (!first) {
+                json.append(',');
+            }
+            first = false;
+            json.append('"').append(escape(value.property().getName()))
+                    .append("\":\"").append(escape(value.valueName())).append('"');
+        }
+        json.append("}}");
+    }
+
+    private static String blockId(net.minecraft.world.level.block.state.BlockState state) {
+        return state.getBlock().builtInRegistryHolder().key().identifier().toString();
+    }
+
+    private static String entityTypeId(net.minecraft.world.entity.Entity entity) {
+        return net.minecraft.core.registries.BuiltInRegistries.ENTITY_TYPE
+                .getKey(entity.getType()).toString();
+    }
+
+    private static void blockPosition(StringBuilder json, net.minecraft.core.BlockPos pos) {
+        json.append("{\"x\":").append(pos.getX())
+                .append(",\"y\":").append(pos.getY())
+                .append(",\"z\":").append(pos.getZ()).append('}');
+    }
+
+    private static void entityPosition(StringBuilder json, net.minecraft.world.entity.Entity entity) {
+        json.append("{\"x\":").append(formatNumber(entity.getX()))
+                .append(",\"y\":").append(formatNumber(entity.getY()))
+                .append(",\"z\":").append(formatNumber(entity.getZ())).append('}');
+    }
+
+    private static void stringField(StringBuilder json, String name, String value) {
+        json.append(",\"").append(name).append("\":\"")
+                .append(escape(value)).append('"');
+    }
+
+    private static void intField(StringBuilder json, String name, int value) {
+        json.append(",\"").append(name).append("\":").append(value);
+    }
+
+    private static void numberField(StringBuilder json, String name, double value) {
+        json.append(",\"").append(name).append("\":").append(formatNumber(value));
+    }
+
+    private static void booleanField(StringBuilder json, String name, boolean value) {
+        json.append(",\"").append(name).append("\":").append(value);
+    }
+
+    private static String formatNumber(double value) {
+        if (Double.isFinite(value) && value == Math.rint(value) && Math.abs(value) < 1.0E9) {
+            return Long.toString((long) value);
+        }
+        return String.format(java.util.Locale.ROOT, "%.2f", value);
+    }
+
+    private static String escape(String value) {
+        StringBuilder escaped = new StringBuilder(value.length());
+        for (int index = 0; index < value.length(); index++) {
+            char character = value.charAt(index);
+            switch (character) {
+                case '"' -> escaped.append("\\\"");
+                case '\\' -> escaped.append("\\\\");
+                case '\n' -> escaped.append("\\n");
+                case '\r' -> escaped.append("\\r");
+                case '\t' -> escaped.append("\\t");
+                default -> {
+                    if (character < 0x20) {
+                        escaped.append(String.format(java.util.Locale.ROOT, "\\u%04x",
+                                (int) character));
+                    } else {
+                        escaped.append(character);
                     }
                 }
             }
-            StringBuilder json = new StringBuilder("{\"scanned\":").append(scanned)
-                    .append(",\"blocks\":{");
-            boolean first = true;
-            for (var entry : counts.entrySet()) {
-                if (!first) {
-                    json.append(',');
-                }
-                first = false;
-                json.append('"').append(entry.getKey()).append("\":").append(entry.getValue());
-            }
-            return ToolResult.ok("context", json.append("}}").toString());
-        }));
+        }
+        return escaped.toString();
     }
+
+    private static final java.util.Set<String> HAZARD_BLOCKS = java.util.Set.of(
+            "minecraft:lava",
+            "minecraft:fire",
+            "minecraft:soul_fire",
+            "minecraft:magma_block",
+            "minecraft:campfire",
+            "minecraft:soul_campfire",
+            "minecraft:tnt",
+            "minecraft:powder_snow",
+            "minecraft:cactus",
+            "minecraft:sweet_berry_bush",
+            "minecraft:wither_rose");
 
     @Override
     public ToolResult inventory(UUID companionId, int slot) {
@@ -165,8 +596,12 @@ public final class FabricCompanionBackend implements CompanionTools.CompanionBac
         }));
     }
 
+    private static String itemId(ItemStack stack) {
+        return stack.getItem().builtInRegistryHolder().key().identifier().toString();
+    }
+
     private static String itemJson(ItemStack stack) {
-        return "{\"item\":\"" + stack.getItem().builtInRegistryHolder().key().identifier()
+        return "{\"item\":\"" + itemId(stack)
                 + "\",\"count\":" + stack.getCount() + '}';
     }
 
