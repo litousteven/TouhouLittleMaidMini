@@ -18,9 +18,16 @@ NeoForge 保留为 Fabric 行为边界稳定后的后续适配，不阻塞首个
 外部 Codex、Claude Code 或其他 MCP 客户端负责推理和长期记忆；模组负责身体、
 可组合动作、本地安全行为、持久化、权限和审计。
 
-当前状态：**M0 技术验证已通过（Fabric 26.3）**。全仓构建、实体与 GameTest、真实客户端
-渲染截图、最小 MCP 连接与停服线程清理均已实测通过，结论为 Go。下一步进入 M1。
-证据见 [docs/validation/M0.md](docs/validation/M0.md)，过程记录见 [M0_PROGRESS.md](M0_PROGRESS.md)。
+当前状态：**M0 已完成，M1/M2 进行中（Fabric 26.3）**。
+
+- M0 技术验证已通过，结论 Go（[记录](docs/validation/M0.md)）。
+- M1 同伴实体、命令、背包与持久化已通过 18 个 GameTest；管理界面与装备槽未完成。
+- M2 MCP 协议层、10 工具契约、认证、作用域、审计、幂等与事件已通过；
+  `companion_interact` 被 Minecraft `26.3` 的玩家上下文限制阻塞，故 M2 未标记完成
+  （[记录](docs/validation/M2.md)）。
+
+过程记录见 [M0_PROGRESS.md](M0_PROGRESS.md)，开发连接步骤见
+[docs/mcp-development-setup.md](docs/mcp-development-setup.md)。
 
 ## 文档
 
