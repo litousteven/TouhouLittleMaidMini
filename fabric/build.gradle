@@ -38,6 +38,8 @@ sourceSets {
     }
 }
 
+def graphicsBackend = providers.gradleProperty('tlmm.graphicsBackend')
+
 loom {
     runs {
         client {
@@ -49,6 +51,9 @@ loom {
             def quickPlay = providers.gradleProperty('tlmm.quickPlay')
             if (quickPlay.present) {
                 programArgs '--username', 'Dev', '--quickPlayMultiplayer', quickPlay.get()
+            }
+            if (graphicsBackend.present) {
+                programArgs '--graphicsBackend', graphicsBackend.get()
             }
         }
         server {
@@ -72,6 +77,9 @@ loom {
             runDir('../run/clientGametest')
             vmArg('-Dfabric.client.gametest')
             vmArg("-Dfabric.client.gametest.modid=${mod_id}")
+            if (graphicsBackend.present) {
+                programArgs '--graphicsBackend', graphicsBackend.get()
+            }
         }
     }
 }

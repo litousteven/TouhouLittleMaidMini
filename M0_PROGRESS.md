@@ -1,20 +1,20 @@
 # M0 临时进度
 
-更新时间：`2026-11-20 19:04 CST`
+更新时间：`2026-11-20 21:20 CST`
 
 当前目标：Minecraft `26.3`、Fabric 首发、Java `25`。NeoForge 只保留后续适配，
 不作为 M0 门禁。
 
+**M0 全部门禁已通过，验收记录见 [`docs/validation/M0.md`](docs/validation/M0.md)。**
+
 ## Git 状态
 
 - 当前分支：`main`
-- `HEAD`：`d067d39 feat(m0): add Fabric platform probe`
-- 已提交的规划切换：`b360d1f docs: prioritize Fabric for Minecraft 26.3`
-- 当前尚未提交的文件：
-  - `fabric/build.gradle`
-  - `fabric/src/main/resources/fabric.mod.json`
-  - `fabric/src/main/java/com/touhoulittlemaid/mini/fabric/gametest/M0ClientGameTests.java`
-  - `M0_PROGRESS.md`
+- `HEAD`：`7f09dfe docs(m0): record Fabric validation checkpoint`
+- 先前提交：`7182204 test(m0): add Fabric client render probe`、
+  `d067d39 feat(m0): add Fabric platform probe`
+- 未提交的 M0 收尾改动：`fabric/build.gradle`、`docs/validation/M0.md`、
+  `M0_PROGRESS.md`、`README.md`。
 - `M0` 完成提交尚未创建。
 
 ## 已完成
@@ -31,7 +31,31 @@
   - Fabric Loom `1.14.10`
   - Java `25`
   - NeoForge spike `26.3.0.101` / ModDevGradle `2.0.148`
-- `gradlew.bat` 已规范为 LF，`git diff --check` 在最后一次中间提交时通过。
+- `gradlew.bat` 在 `core.autocrlf=true` 下工作区为 CRLF，索引与远端仍为 LF；
+  `git diff --check` 通过。
+
+### Windows 开发环境（2026-11-20 重建）
+
+原进度记录基于 macOS。当前实际开发机为 Windows 11，已重建并验证：
+
+- JDK：Temurin `25.0.5.1+2`，解压到 `%USERPROFILE%\.jdks\jdk-25.0.5.1+2`。
+- 已持久化用户环境变量：`JAVA_HOME` 指向该 JDK，`PATH` 前置 `%JAVA_HOME%\bin`。
+- Gradle wrapper 首次运行已下载 `gradle-9.7.1-bin.zip` 到默认
+  `%USERPROFILE%\.gradle`。
+- 已验证通过的 Windows 命令：
+
+```powershell
+$env:JAVA_HOME="$env:USERPROFILE\.jdks\jdk-25.0.5.1+2"
+$env:PATH="$env:JAVA_HOME\bin;$env:PATH"
+.\gradlew.bat --version          # Gradle 9.7.1 / Launcher JVM 25.0.5.1
+.\gradlew.bat :core:test :mcp:test
+.\gradlew.bat :fabric:compileJava
+.\gradlew.bat build
+```
+
+- 本次结果：`core`、`mcp` 测试通过；`fabric` 编译通过；`./gradlew build` 全仓成功，
+  产出 `core`、`mcp`、`fabric`、`neoforge` 四个模块的 jar。
+- 因此文档中"全仓 `./gradlew build`"这一 M0 门禁已在 Windows 上达成。
 
 ### Core 与 MCP
 
@@ -78,62 +102,86 @@
   NeoForge GameTest。
 - 按照当前优先级，不把 NeoForge 重新验证作为 M0 阻塞项。
 
-## 当前未完成
+## M0 门禁状态：已完成
 
-### Client GameTest 阻塞
+`docs/validation/M0.md` 记录了完整命令、结果、版本与 Go/No-Go 结论。摘要：
 
-已新增 `M0ClientGameTests`，目标是：
+- 全仓 `.\gradlew.bat build` 通过，四个模块 jar 均产出。
+- `:core:test :mcp:test` 通过。
+- `:fabric:runGameTestServer` 两次运行均 `All 3 required tests passed`；SavedData 基线值
+  `0` → `1`，跨启动持久化成立。
+- `:fabric:runClientGametest` 在真实客户端创建世界、生成 `tlmm:debug_companion` 并产出
+  截图 `0000_m0-fabric-render.png`，画面确认占位模型可见。
+- 真实专用服 MCP E2E：`initialize`、`tools/list`（仅 `ping`/`state`）、`ping`、`state`、
+  401（无/错 Token）、未知工具、未知方法全部符合预期。
+- 停服清理：同一次运行内出现 `[mcp] listening` → `All 3 required tests passed` →
+  `[mcp] stopped`；运行后 TCP `8765`/`25565` 无监听、无残留 `java` 进程。
 
-1. 自动创建单人测试世界。
-2. 在玩家视线前方生成 `tlmm:debug_companion`。
-3. 调用 Fabric Client GameTest 截图 API。
-4. 校验 PNG 存在且大于 1 KiB。
+### Client GameTest 阻塞的根因与修复
 
-当前状态：
+原记录判断为"卡在标题界面、world builder 时序问题"，实测并非如此。
 
-- `:fabric:compileJava` 通过，Client GameTest API 和 entrypoint 均可编译。
-- `:fabric:runClientGametest` 能启动真实 Fabric 客户端。
-- 日志确认 `fabric-client-gametest-api-v1`、`tlmm` 和 Client GameTest entrypoint
-  已注册。
-- 客户端已进入渲染线程并完成基础资源加载。
-- 但测试目前停在标题界面，没有创建世界，也没有生成截图；需要继续诊断
-  Fabric Client GameTest 的 world builder/启动时序。
-- 本次 `runClientGametest` 因重启前手动终止而返回 exit code `143`；这是主动停止，
-  不是一次完整测试结论。
-- 系统级 `screencapture` 当前为黑屏，不能作为可靠验收证据；应继续使用游戏内截图 API。
+- 真实现象：进程以 `exit value -1073741819 (NTSTATUS 0xC0000005)` 退出，即原生访问
+  冲突，发生在 GUI 初始化阶段，无 Java 异常与 crash report。
+- 根因：本机 OpenGL 上下文报告 `3.3.0 Core Profile`（RX 7900 XT 预期 4.6），
+  Minecraft `26.3` 的 `renderpearl` 渲染层在该路径下崩溃。普通 `runClient` 同样崩溃，
+  证明与 Client GameTest 代码无关。
+- 修复：使用 Minecraft `26.3` 的 `--graphicsBackend` 参数。`fabric/build.gradle` 新增
+  可选属性 `tlmm.graphicsBackend`，仅在显式传入时转发：
 
-### 剩余 M0 门禁
+```powershell
+.\gradlew.bat :fabric:runClient -Ptlmm.graphicsBackend=vulkan
+.\gradlew.bat :fabric:runClientGametest -Ptlmm.graphicsBackend=vulkan
+```
 
-- 修复并跑通 Client GameTest 自动截图，确认测试实体在真实客户端可见。
-- 运行整个仓库的 `./gradlew build`。
-- 若时间允许，再次运行 Fabric GameTest，确认第二次启动能够读取已保存的 SavedData。
-- 更新技术方案中的 M0 MCP 结论：
-  - Numen `v0.1.5-26.3-beta` 的公开 Maven 坐标未找到。
-  - 当前 M0 使用项目自己的最小纯 JVM MCP 层。
-  - M2 再决定 vendor Numen `mcp` 模块或继续维护最小层。
-- 创建 `docs/validation/M0.md`，记录命令、结果、版本和 Go/No-Go。
+- 对照实验：删除截图与 `options.txt` 后，不传属性仍崩溃；传 `vulkan` 则通过
+  （`Using graphics backend Vulkan … AMD proprietary driver 26.9.2`）。
+- 默认行为未变，不影响 CI 与其他机器。
+
+### MCP 依赖结论
+
+- Numen `v0.1.5-26.3-beta` 的公开 Maven 坐标未找到。
+- M0 使用项目自己的最小纯 JVM MCP 层（`mcp` 模块，无 Minecraft 依赖）。
+- M2 再决定 vendor Numen `mcp` 模块或继续维护最小层。
+
+### 剩余收尾
+
 - 检查 `git status`、完整 diff、`git diff --check`。
 - 使用 Conventional Commit 创建 `M0` 完成提交。
 
 ## 恢复工作
 
-重启后先读取本文件，再执行：
+重启后先读取本文件。Windows 下从仓库根目录执行：
 
-```bash
-# 从仓库根目录执行
-export JAVA_HOME="$(brew --prefix openjdk@25)/libexec/openjdk.jdk/Contents/Home"
-export GRADLE_USER_HOME="$PWD/.gradle"
-export PATH="$JAVA_HOME/bin:/opt/homebrew/bin:/usr/bin:/bin"
+```powershell
+$env:JAVA_HOME="$env:USERPROFILE\.jdks\jdk-25.0.5.1+2"
+$env:PATH="$env:JAVA_HOME\bin;$env:PATH"
 
 git status --short
 git log -3 --oneline --decorate
 
-./gradlew :core:test :mcp:test
-./gradlew :fabric:compileJava
-./gradlew :fabric:runGameTestServer
-./gradlew :fabric:runClientGametest
-./gradlew build
+.\gradlew.bat :core:test :mcp:test
+.\gradlew.bat :fabric:compileJava
+.\gradlew.bat :fabric:runGameTestServer
+.\gradlew.bat :fabric:runClientGametest -Ptlmm.graphicsBackend=vulkan
+.\gradlew.bat build
 ```
+
+本机开发客户端必须带 `-Ptlmm.graphicsBackend=vulkan`；不加会以 `0xC0000005` 崩溃。
+
+macOS 旧环境（已不再使用，仅存档）：
+
+```bash
+export JAVA_HOME="$(brew --prefix openjdk@25)/libexec/openjdk.jdk/Contents/Home"
+export PATH="$JAVA_HOME/bin:/opt/homebrew/bin:/usr/bin:/bin"
+```
+
+Windows 与旧记录的两处差异：
+
+- 不再设置 `GRADLE_USER_HOME="$PWD/.gradle"`；Gradle 缓存默认落在
+  `%USERPROFILE%\.gradle`。
+- Gradle wrapper 用 `.\gradlew.bat`，不是 `./gradlew`；运行目录仍为仓库根 `run/`
+  （Loom 的 `runDir('../run/client')` 相对 `fabric/` 解析）。
 
 Client GameTest 检查文件：
 
