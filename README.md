@@ -4,8 +4,9 @@
 
 项目名：**TouhouLittleMaidMini**
 
-一个面向 Minecraft `26.3`、NeoForge、Java 25 的 AI-first 轻量同伴模组。项目借鉴
+一个面向 Minecraft `26.3`、Java 25、Fabric 首发的 AI-first 轻量同伴模组。项目借鉴
 TouhouLittleMaid 的实体和交互形态，但**不复制它不断增长的任务类与专用逻辑**。
+NeoForge 保留为 Fabric 行为边界稳定后的后续适配，不阻塞首个发行版。
 
 核心目标不是“用更少 Java 重写一遍 TLM”，而是换掉扩展模型：
 
@@ -37,7 +38,7 @@ TouhouLittleMaid 的实体和交互形态，但**不复制它不断增长的任�
 
 首版目标：
 
-- `26.3` NeoForge 单加载器、单同伴、三类本地行为与五种通用动作。
+- `26.3` Fabric 首发、单同伴、三类本地行为与五种通用动作。
 - 外部 Agent CLI 通过 Streamable HTTP MCP 驾驶。
 - Agent 用通用动作组合完成农作、钓鱼和其他模组交互，不为每种玩法复制 Java Task。
 - 同伴依赖原版 Brain、寻路与本地安全本能。
@@ -49,7 +50,7 @@ TouhouLittleMaid 的实体和交互形态，但**不复制它不断增长的任�
 - 完整 TouhouLittleMaid 功能复刻。
 - Numen 式通用服务端假玩家。
 - 模组内置 LLM 对话、语音识别、TTS。
-- Fabric/NeoForge 双加载器同步开发。
+- Fabric 首发路径未稳定前同步开发 NeoForge。
 - 首版通用挖矿、建造和复杂模组 GUI 自动化。
 - “一个玩法一个 Java Task”的扩展方式。
 

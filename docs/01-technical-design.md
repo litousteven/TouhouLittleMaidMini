@@ -1,7 +1,8 @@
 # TouhouLittleMaidMini 技术方案
 
 版本：`0.1-design`  
-目标平台：Minecraft `26.3`、NeoForge `26.3.0.101`、Java `25`
+首发平台：Minecraft `26.3`、Fabric Loader `0.20.1`、Fabric API `0.165.2+26.3`、
+Java `25`。NeoForge `26.3.0.101` 保留为后续适配基线。
 
 ## 0. 参考仓库与借鉴边界
 
@@ -18,7 +19,7 @@
 
 ## 1. 结论
 
-项目采用**独立轻量同伴模组 + 外部 MCP Agent + Skill/数据驱动的扩展方式**。
+项目采用**Fabric 首发的独立轻量同伴模组 + 外部 MCP Agent + Skill/数据驱动的扩展方式**。
 
 它不以“减少 TLM 的代码行数”为终点，而是替换扩展模型：TouhouLittleMaid 倾向于为每种
 工作增加 Task、Behavior、GUI 和专用逻辑；本项目让 Agent 使用少量稳定动作、上下文和
@@ -34,6 +35,8 @@ Java。
 - Numen 已有 `v0.1.5-26.3-beta` 预发行标签，并提供了不认识同伴和游戏的纯 JVM
   MCP 模块；README 的支持版本表与 Release 页面需要在 M0 一并核对，不能直接把
   Release 标签当成稳定制品。
+- Fabric 26.3 已有可用的 Numen 构建基线，先复用其纯 JVM MCP 边界和加载器接缝经验；
+  NeoForge 适配等 Fabric 的动作、权限和事件契约稳定后再实施。
 - 自定义 Mob 更接近 TLM 的女仆形态，但会牺牲 Numen `ServerPlayer` 的通用玩家能力。
   首版明确选择“可由 AI 组合的轻量身体”，不承诺成为万能玩家。
 
@@ -91,10 +94,12 @@ flowchart LR
 |---|---|---|
 | `tlm-mini-core` | 通用动作、操作状态、事件模型、配置模型 | 否 |
 | `tlm-mini-mcp` | 把 core 映射为 MCP 工具和长轮询事件 | 否 |
-| `tlm-mini-neoforge` | 实体、Brain、动作执行器、注册、持久化和网络 | 是 |
+| `tlm-mini-fabric` | Fabric 入口、实体、Brain、动作执行器、注册、持久化和网络 | 是 |
+| `tlm-mini-neoforge` | Fabric 稳定后的 Neoforge 适配层 | 是 |
 | `tlm-mini-client` | 渲染、声音、管理界面和客户端同步 | 是 |
 
-为减少首版复杂度，可以先用一个 Gradle 项目承载，但包边界必须按上表保留。纯 Java
+为减少首版复杂度，可以先用一个 Gradle 项目承载，但包边界必须按上表保留。首版
+验收目标和 `0.1.0-beta` 发布物只要求 Fabric；纯 Java
 的动作与 MCP 模型不得 import Minecraft 类型。
 
 ### 3.2 MCP 实现策略

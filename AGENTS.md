@@ -3,11 +3,12 @@
 ## 当前阶段
 
 当前只完成技术设计，尚未创建 Gradle 工程或游戏代码。开始实现后，先完成
-`docs/02-development-plan.md` 的 M0 技术验证，再进入实体与 MCP 功能开发。
+`docs/02-development-plan.md` 的 M0 Fabric 技术验证，再进入实体与 MCP 功能开发。
 
 ## 不可改变的边界
 
-- 目标平台是 Minecraft `26.3`、NeoForge、Java 25。
+- 首发和主验证加载器是 Minecraft `26.3`、Fabric、Java 25。NeoForge 保留为后续适配，
+  不阻塞首个 Fabric `0.1.0-beta`。
 - 外部 Agent CLI 是唯一模型大脑；发行模组不得包含 API Key、LLM SDK、STT 或 TTS。
 - 不为每种作物、工作或模组新增一个 Java Task。玩法决策必须优先由 Agent、Skill、
   数据标签和通用动作组合完成。
@@ -36,12 +37,13 @@
 ```text
 core/      纯 Java 的通用动作、事件和状态模型
 mcp/       MCP host、参数解码和协议映射
+fabric/    Fabric 入口、实体、Brain、动作执行器、注册和持久化
 neoforge/  实体、Brain、动作执行器、注册和持久化
 client/    渲染、界面和客户端同步
 ```
 
-`core` 与 `mcp` 不得 import Minecraft 或 NeoForge。HTTP 线程不得直接修改世界；所有身体
-动作必须切到服务端主线程执行。
+`core` 与 `mcp` 不得 import Minecraft、Fabric 或 NeoForge。HTTP 线程不得直接修改世界；
+所有身体动作必须切到服务端主线程执行。
 
 ## 验证顺序
 
@@ -72,6 +74,7 @@ client/    渲染、界面和客户端同步
 ## 升级规则
 
 - 与 Minecraft/NeoForge 强耦合的代码只放在 `neoforge/` 和 `client/`。
+- 与 Minecraft/Fabric 强耦合的代码只放在 `fabric/` 和 `client/`。
 - `core/`、`mcp/`、Skill 和动作 schema 不依赖具体 Minecraft 类。
 - 每个受支持游戏版本必须有一条迁移检查表，记录 API 重命名、包名变化和运行验证结果。
 - 不允许为了少写一个动作而把某种玩法逻辑放进 MCP 传输层。

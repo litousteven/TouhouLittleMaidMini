@@ -30,6 +30,8 @@
 ```text
 main       稳定层、文档、Skill、MCP 契约
 mc/26.3    可发布版本分支
+fabric/26.3 首发加载器分支
+neoforge/26.3 后续适配分支
 mc/<next>  下一游戏版本分支
 ```
 
@@ -49,7 +51,8 @@ adapter 工程，不在首版提前复杂化。
 记录当前基线：
 
 - NeoForge 版本。
-- Fabric 版本（如果未来支持）。
+- Fabric Loader 与 Fabric API 版本。
+- NeoForge 版本（后续适配分支）。
 - Java toolchain。
 - Gecko 或其他客户端依赖版本。
 - 当前 MCP 工具表哈希。

@@ -7,10 +7,11 @@
 | 组件 | 版本 |
 |---|---|
 | Minecraft | `26.3` |
-| NeoForge | `26.3.0.101` |
+| Fabric Loader | `0.20.1` |
+| Fabric API | `0.165.2+26.3` |
 | Java | `25` |
 | Gradle | 使用仓库 wrapper |
-| ModDevGradle | `2.0.141` |
+| Fabric Loom | `1.14.10` |
 | MCP 客户端 | 支持 Streamable HTTP + Bearer Token |
 
 首次准备：
@@ -24,7 +25,7 @@ java -version
 要求：
 
 - `java -version` 必须显示 JDK 25。
-- Gradle wrapper 与游戏都使用同一 JDK 25 toolchain。
+- Gradle wrapper、Fabric 游戏运行和 GameTest 都使用同一 JDK 25 toolchain。
 - 客户端、服务端和测试任务不得复用同一个运行目录。
 
 推荐目录：
