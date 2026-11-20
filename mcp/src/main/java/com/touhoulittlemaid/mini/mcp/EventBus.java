@@ -23,6 +23,7 @@ public final class EventBus {
     private final int capacity;
     private long lastSequence;
     private final Deque<CompanionEvent> events = new ArrayDeque<>();
+    private volatile java.util.function.Consumer<CompanionEvent> listener = event -> { };
 
     public EventBus() {
         this(DEFAULT_CAPACITY);
@@ -46,7 +47,14 @@ public final class EventBus {
         while (events.size() > capacity) {
             events.removeFirst();
         }
+        notifyAll();
+        listener.accept(event);
         return event;
+    }
+
+    /** Optional sink for rotated on-disk logging. Must not block. */
+    public void setListener(java.util.function.Consumer<CompanionEvent> listener) {
+        this.listener = Objects.requireNonNull(listener, "listener");
     }
 
     public synchronized long lastSequence() {
@@ -59,15 +67,52 @@ public final class EventBus {
     }
 
     /**
-     * Events after {@code afterSequence}, capped at {@code maxEvents}.
+     * Events after {@code afterSequence} for one companion, capped at {@code maxEvents}.
      *
-     * @return the events, or an empty list when the cursor has expired; callers must
-     *         check {@link #cursorExpired(long)} first to distinguish the two
+     * @return the events, or an empty list when there are none; callers must check
+     *         {@link #cursorExpired(long)} first to distinguish that from expiry
      */
-    public synchronized List<CompanionEvent> after(long afterSequence, int maxEvents) {
+    public synchronized List<CompanionEvent> after(String companionId, long afterSequence,
+            int maxEvents) {
+        return collect(companionId, afterSequence, maxEvents);
+    }
+
+    /**
+     * Waits until an event for the companion arrives or the timeout expires.
+     *
+     * <p>Called from the MCP HTTP thread, never from the server thread. Publishing
+     * notifies every waiter.
+     */
+    public List<CompanionEvent> await(String companionId, long afterSequence,
+            long timeoutMillis, int maxEvents) {
+        long deadline = System.nanoTime() + Math.max(0L, timeoutMillis) * 1_000_000L;
+        synchronized (this) {
+            while (true) {
+                List<CompanionEvent> selected = collect(companionId, afterSequence, maxEvents);
+                if (!selected.isEmpty()) {
+                    return selected;
+                }
+                long remainingNanos = deadline - System.nanoTime();
+                if (remainingNanos <= 0L) {
+                    return List.of();
+                }
+                try {
+                    wait(Math.max(1L, remainingNanos / 1_000_000L));
+                } catch (InterruptedException exception) {
+                    Thread.currentThread().interrupt();
+                    return List.of();
+                }
+            }
+        }
+    }
+
+    private List<CompanionEvent> collect(String companionId, long afterSequence, int maxEvents) {
         List<CompanionEvent> selected = new ArrayList<>();
         for (CompanionEvent event : events) {
             if (event.sequence() <= afterSequence) {
+                continue;
+            }
+            if (companionId != null && !companionId.equals(event.companionId())) {
                 continue;
             }
             if (selected.size() >= maxEvents) {

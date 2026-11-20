@@ -11,12 +11,15 @@ import com.touhoulittlemaid.mini.mcp.CompanionTools;
 import com.touhoulittlemaid.mini.mcp.EventBus;
 import com.touhoulittlemaid.mini.mcp.McpServer;
 import com.touhoulittlemaid.mini.mcp.McpServerConfig;
+import com.touhoulittlemaid.mini.mcp.RollingEventLog;
 import com.touhoulittlemaid.mini.mcp.TokenScope;
 
+import java.nio.file.Path;
 import java.util.concurrent.atomic.AtomicReference;
 
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
+import net.fabricmc.loader.api.FabricLoader;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -30,6 +33,7 @@ public final class TlmmFabric implements ModInitializer {
     private final AtomicReference<PlatformState> state =
             new AtomicReference<>(PlatformState.starting(MOD_VERSION, MINECRAFT_VERSION));
     private McpServer mcpServer;
+    private RollingEventLog eventLog;
 
     @Override
     public void onInitialize() {
@@ -39,13 +43,29 @@ public final class TlmmFabric implements ModInitializer {
             int saveVersion = M0SavedData.get(server).value();
             LOGGER.info("[m0] saved-data baseline value={}", saveVersion);
             CompanionConfigs.load();
-            CompanionRuntimeState.install(new EventBus());
+            EventBus events = new EventBus();
+            Path logDirectory = FabricLoader.getInstance().getGameDir().resolve("logs");
+            try {
+                eventLog = new RollingEventLog(logDirectory, "tlmm-events",
+                        CompanionConfigs.current().eventMaxFileMb() * 1024L * 1024L,
+                        CompanionConfigs.current().eventRetentionDays());
+                events.setListener(eventLog::append);
+            } catch (RuntimeException exception) {
+                LOGGER.warn("[events] rotating log disabled ({})",
+                        exception.getClass().getSimpleName());
+                eventLog = null;
+            }
+            CompanionRuntimeState.install(events);
             CompanionRuntimeState.setMcpConnected(false);
             state.set(state.get().ready());
             startMcp(server);
         });
         ServerLifecycleEvents.SERVER_STOPPED.register(server -> {
             stopMcp();
+            if (eventLog != null) {
+                eventLog.close();
+                eventLog = null;
+            }
             CompanionConfigs.reset();
             state.set(PlatformState.starting(MOD_VERSION, MINECRAFT_VERSION));
         });

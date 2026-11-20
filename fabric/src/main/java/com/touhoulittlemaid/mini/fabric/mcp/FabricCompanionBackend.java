@@ -960,24 +960,42 @@ public final class FabricCompanionBackend implements CompanionTools.CompanionBac
     @Override
     public ToolResult waitEvents(UUID companionId, long afterSequence,
             int timeoutSeconds, int maxEvents) {
-        return runOnServer(ignored -> withCompanion(companionId, companion -> {
-            if (events.cursorExpired(afterSequence)) {
-                return ToolResult.rejected("event_cursor_expired",
-                        "Cursor is older than the retained window; call companion_state first");
+        boolean exists = runOnServer(ignored -> allCompanions().stream()
+                .anyMatch(companion -> companion.getUUID().equals(companionId)));
+        if (!exists) {
+            return ToolResult.rejected("unknown_companion",
+                    "No such companion: " + companionId);
+        }
+        if (events.cursorExpired(afterSequence)) {
+            return ToolResult.rejected("event_cursor_expired",
+                    "Cursor is older than the retained window; call companion_state first");
+        }
+
+        int timeout = Math.max(0, Math.min(timeoutSeconds, 120));
+        // A GameTest or any caller already on the server thread must not park it.
+        if (server.isSameThread()) {
+            timeout = 0;
+        }
+        List<com.touhoulittlemaid.mini.core.CompanionEvent> pending =
+                timeout == 0
+                        ? events.after(companionId.toString(), afterSequence, maxEvents)
+                        : events.await(companionId.toString(), afterSequence,
+                                timeout * 1_000L, maxEvents);
+        if (events.cursorExpired(afterSequence)) {
+            return ToolResult.rejected("event_cursor_expired",
+                    "Cursor is older than the retained window; call companion_state first");
+        }
+
+        StringBuilder json = new StringBuilder("{\"events\":[");
+        for (int index = 0; index < pending.size(); index++) {
+            if (index > 0) {
+                json.append(',');
             }
-            List<com.touhoulittlemaid.mini.core.CompanionEvent> pending =
-                    events.after(afterSequence, maxEvents);
-            StringBuilder json = new StringBuilder("{\"events\":[");
-            for (int index = 0; index < pending.size(); index++) {
-                if (index > 0) {
-                    json.append(',');
-                }
-                json.append(pending.get(index).toJson());
-            }
-            json.append("],\"next_seq\":").append(events.lastSequence())
-                    .append(",\"timed_out\":").append(pending.isEmpty()).append('}');
-            return ToolResult.ok("events", json.toString());
-        }));
+            json.append(pending.get(index).toJson());
+        }
+        json.append("],\"next_seq\":").append(events.lastSequence())
+                .append(",\"timed_out\":").append(pending.isEmpty()).append('}');
+        return ToolResult.ok("events", json.toString());
     }
 
     @Override

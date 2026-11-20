@@ -25,7 +25,9 @@ public record CompanionServerConfig(
         boolean continueOperationAfterDisconnect,
         LocalBehavior safeModeAfterDisconnect,
         int hungerDecaySeconds,
-        int lowHealthPercent) {
+        int lowHealthPercent,
+        int eventRetentionDays,
+        int eventMaxFileMb) {
 
     public static final String LOOPBACK_V4 = "127.0.0.1";
     public static final String LOOPBACK_V6 = "::1";
@@ -48,11 +50,13 @@ public record CompanionServerConfig(
         disconnectGraceSeconds = clamp(disconnectGraceSeconds, 0, 3600, 60);
         hungerDecaySeconds = clamp(hungerDecaySeconds, 5, 600, 30);
         lowHealthPercent = clamp(lowHealthPercent, 5, 90, 30);
+        eventRetentionDays = clamp(eventRetentionDays, 0, 365, 7);
+        eventMaxFileMb = clamp(eventMaxFileMb, 1, 1024, 16);
     }
 
     public static CompanionServerConfig defaults() {
         return new CompanionServerConfig(true, LOOPBACK_V4, DEFAULT_PORT, 16, 16, 16,
-                60, false, LocalBehavior.STAY, 30, 30);
+                60, false, LocalBehavior.STAY, 30, 30, 7, 16);
     }
 
     /**
@@ -109,10 +113,13 @@ public record CompanionServerConfig(
                 LocalBehavior.STAY, problems);
         int hungerDecay = integer(values, "hunger_decay_seconds", 30, 5, 600, problems);
         int lowHealth = integer(values, "low_health_percent", 30, 5, 90, problems);
+        int retentionDays = integer(values, "event_retention_days", 7, 0, 365, problems);
+        int eventMaxFileMb = integer(values, "event_max_file_mb", 16, 1, 1024, problems);
 
         CompanionServerConfig config = new CompanionServerConfig(enabled, host, port,
                 maxCompanions, maxActionRadius, defaultWorkRadius, grace,
-                continueAfterDisconnect, safeMode, hungerDecay, lowHealth);
+                continueAfterDisconnect, safeMode, hungerDecay, lowHealth,
+                retentionDays, eventMaxFileMb);
         return new ParseResult(config, List.copyOf(problems));
     }
 
@@ -131,9 +138,12 @@ public record CompanionServerConfig(
                 safe_mode_after_disconnect = "%s"
                 hunger_decay_seconds = %d
                 low_health_percent = %d
+                event_retention_days = %d
+                event_max_file_mb = %d
                 """.formatted(mcpEnabled, mcpHost, mcpPort, maxCompanions, maxActionRadius,
                 defaultWorkRadius, disconnectGraceSeconds, continueOperationAfterDisconnect,
-                safeModeAfterDisconnect.id(), hungerDecaySeconds, lowHealthPercent);
+                safeModeAfterDisconnect.id(), hungerDecaySeconds, lowHealthPercent,
+                eventRetentionDays, eventMaxFileMb);
     }
 
     public int clampedRadius(int requested) {

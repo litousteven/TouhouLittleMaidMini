@@ -341,7 +341,8 @@ Token scope 之外的同伴不出现在结果中。
 
 ## 10. `companion_wait_events`
 
-长轮询，只读。
+长轮询，只读。请求在 HTTP 线程挂起，直到有该同伴的新事件或 `timeout_seconds` 到期；
+服务端主线程不被阻塞。
 
 ```json
 {
@@ -379,9 +380,10 @@ Token scope 之外的同伴不出现在结果中。
 | `permission_resolved` | 允许/拒绝 |
 | `mcp_disconnected` | 断线宽限期开始 |
 
-`event_seq` 必须单调递增。客户端重连时从自己的 `after_seq` 继续；服务端不得重复发送
-已经确认消费的序号。保留期外的游标返回 `event_cursor_expired`，要求先调用
-`companion_state` 重建状态。
+只返回该 `companion_id` 的事件。`event_seq` 必须单调递增。客户端重连时从自己的
+`after_seq` 继续；服务端不得重复发送已经确认消费的序号。保留期外的游标返回
+`event_cursor_expired`，要求先调用 `companion_state` 重建状态。事件同时写入按大小
+滚动、按天数清理的 JSON-lines 日志；日志不含 Token、完整背包或聊天正文。
 
 ## 11. `companion_say`
 

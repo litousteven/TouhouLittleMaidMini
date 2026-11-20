@@ -91,13 +91,13 @@ class CompanionServerConfigTest {
     @Test
     void recordRejectsNonLoopbackDirectly() {
         assertThrows(IllegalArgumentException.class, () -> new CompanionServerConfig(
-                true, "10.0.0.5", 8765, 16, 16, 16, 60, false, LocalBehavior.STAY, 30, 30));
+                true, "10.0.0.5", 8765, 16, 16, 16, 60, false, LocalBehavior.STAY, 30, 30, 7, 16));
     }
 
     @Test
     void tomlRoundTripKeepsTheValues() {
         CompanionServerConfig original = new CompanionServerConfig(
-                true, "localhost", 9000, 8, 32, 20, 120, true, LocalBehavior.GUARD, 45, 25);
+                true, "localhost", 9000, 8, 32, 20, 120, true, LocalBehavior.GUARD, 45, 25, 3, 8);
         CompanionServerConfig.ParseResult parsed =
                 CompanionServerConfig.parse(original.toToml());
         assertFalse(parsed.hasProblems(), () -> parsed.problems().toString());
@@ -115,7 +115,7 @@ class CompanionServerConfigTest {
     @Test
     void radiusAndSafetyHelpersClampToConfiguredLimits() {
         CompanionServerConfig config = new CompanionServerConfig(
-                true, "127.0.0.1", 8765, 16, 24, 12, 60, false, LocalBehavior.STAY, 30, 30);
+                true, "127.0.0.1", 8765, 16, 24, 12, 60, false, LocalBehavior.STAY, 30, 30, 7, 16);
         assertEquals(24, config.clampedRadius(200));
         assertEquals(1, config.clampedRadius(-5));
         assertTrue(config.isSafetyStopped(4.0F, 20.0F));
