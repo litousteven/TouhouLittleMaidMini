@@ -4,10 +4,17 @@ import com.touhoulittlemaid.mini.core.ActionKind;
 import com.touhoulittlemaid.mini.core.CompanionSnapshot;
 import com.touhoulittlemaid.mini.core.ContextCategory;
 import com.touhoulittlemaid.mini.core.ContextQuery;
+import com.touhoulittlemaid.mini.core.InteractButton;
+import com.touhoulittlemaid.mini.core.InteractHand;
+import com.touhoulittlemaid.mini.core.InteractRequest;
+import com.touhoulittlemaid.mini.core.InteractTargetKind;
 import com.touhoulittlemaid.mini.core.InventoryAction;
 import com.touhoulittlemaid.mini.core.InventoryRequest;
 import com.touhoulittlemaid.mini.core.InventoryTarget;
 import com.touhoulittlemaid.mini.core.LocalBehavior;
+import com.touhoulittlemaid.mini.core.MoveMode;
+import com.touhoulittlemaid.mini.core.MoveRequest;
+import com.touhoulittlemaid.mini.core.MoveTargetKind;
 import com.touhoulittlemaid.mini.core.ToolResult;
 import com.touhoulittlemaid.mini.core.ToolSpec;
 import com.touhoulittlemaid.mini.core.ToolSpec.ToolParameter;
@@ -48,11 +55,11 @@ public final class CompanionTools {
             }
         }
 
-        /** Move to a block position. */
-        ToolResult move(UUID companionId, int x, int y, int z, double speed);
+        /** Move toward or away from a position, block or entity. */
+        ToolResult move(UUID companionId, MoveRequest request);
 
-        /** Right-click a block position. */
-        ToolResult interact(UUID companionId, int x, int y, int z);
+        /** Perform one player-like block, entity or air interaction. */
+        ToolResult interact(UUID companionId, InteractRequest request);
 
         /** Bounded observation of one context category. */
         ToolResult context(UUID companionId, ContextQuery query);
@@ -124,40 +131,112 @@ public final class CompanionTools {
         registry.register(new ToolSpec(
                         "companion_move",
                         "Move companion",
-                        "Walk the companion to a block position.",
+                        "Walks the companion toward or away from a position, block or entity. "
+                                + "Long paths run as a body operation and do not block the caller.",
                         ordered(
                                 "companion_id", ToolParameter.requiredString("Companion UUID"),
-                                "x", ToolParameter.requiredInteger("Target block X"),
-                                "y", ToolParameter.requiredInteger("Target block Y"),
-                                "z", ToolParameter.requiredInteger("Target block Z")),
+                                "target_kind", ToolParameter.optionalString(
+                                        "position, block or entity"),
+                                "x", ToolParameter.optionalInteger("Target block X"),
+                                "y", ToolParameter.optionalInteger("Target block Y"),
+                                "z", ToolParameter.optionalInteger("Target block Z"),
+                                "entity_id", ToolParameter.optionalString("Target entity UUID"),
+                                "mode", ToolParameter.optionalString("goto or away"),
+                                "distance", ToolParameter.optionalNumber(
+                                        "Stop distance in blocks"),
+                                "replace", ToolParameter.optionalBoolean(
+                                        "Replace the current body operation")),
                         false, false, false),
                 arguments -> {
                     Optional<UUID> id = companionId(arguments);
                     if (id.isEmpty()) {
                         return ToolResult.rejected("invalid_params", "companion_id must be a UUID");
                     }
-                    return backend.move(id.get(),
-                            intValue(arguments, "x"), intValue(arguments, "y"), intValue(arguments, "z"),
-                            1.0D);
+                    MoveTargetKind targetKind;
+                    MoveMode mode;
+                    try {
+                        String entityId = stringValue(arguments, "entity_id", "");
+                        targetKind = MoveTargetKind.fromId(stringValue(arguments, "target_kind",
+                                entityId.isBlank()
+                                        ? MoveTargetKind.BLOCK.id()
+                                        : MoveTargetKind.ENTITY.id()));
+                        mode = MoveMode.fromId(
+                                stringValue(arguments, "mode", MoveMode.GOTO.id()));
+                    } catch (IllegalArgumentException exception) {
+                        return ToolResult.rejected("invalid_params", exception.getMessage());
+                    }
+                    String entityId = stringValue(arguments, "entity_id", "");
+                    if (targetKind == MoveTargetKind.ENTITY && entityId.isBlank()) {
+                        return ToolResult.rejected("invalid_params",
+                                "entity targets require entity_id");
+                    }
+                    if (targetKind != MoveTargetKind.ENTITY
+                            && !(arguments.containsKey("x") && arguments.containsKey("y")
+                            && arguments.containsKey("z"))) {
+                        return ToolResult.rejected("invalid_params",
+                                "x, y and z are required for position and block targets");
+                    }
+                    return backend.move(id.get(), new MoveRequest(targetKind,
+                            intValue(arguments, "x"), intValue(arguments, "y"),
+                            intValue(arguments, "z"), entityId, mode,
+                            doubleValue(arguments, "distance", 1.0D),
+                            booleanValue(arguments, "replace", true)));
                 });
 
         registry.register(new ToolSpec(
                         "companion_interact",
-                        "Interact with a block",
-                        "Right-click a block position as the companion.",
+                        "Interact",
+                        "Performs one player-like click on a block, entity or air position. "
+                                + "Crops are harvested when mature and replanted from carried seeds.",
                         ordered(
                                 "companion_id", ToolParameter.requiredString("Companion UUID"),
-                                "x", ToolParameter.requiredInteger("Target block X"),
-                                "y", ToolParameter.requiredInteger("Target block Y"),
-                                "z", ToolParameter.requiredInteger("Target block Z")),
+                                "target_kind", ToolParameter.optionalString("block, entity or air"),
+                                "x", ToolParameter.optionalInteger("Target block X"),
+                                "y", ToolParameter.optionalInteger("Target block Y"),
+                                "z", ToolParameter.optionalInteger("Target block Z"),
+                                "entity_id", ToolParameter.optionalString("Target entity UUID"),
+                                "button", ToolParameter.optionalString("right or left"),
+                                "hand", ToolParameter.optionalString("main or off"),
+                                "sneak", ToolParameter.optionalBoolean("Sneak while interacting"),
+                                "replace", ToolParameter.optionalBoolean(
+                                        "Replace the current body operation")),
                         false, false, false),
                 arguments -> {
                     Optional<UUID> id = companionId(arguments);
                     if (id.isEmpty()) {
                         return ToolResult.rejected("invalid_params", "companion_id must be a UUID");
                     }
-                    return backend.interact(id.get(),
-                            intValue(arguments, "x"), intValue(arguments, "y"), intValue(arguments, "z"));
+                    InteractTargetKind targetKind;
+                    InteractButton button;
+                    InteractHand hand;
+                    String entityId = stringValue(arguments, "entity_id", "");
+                    try {
+                        targetKind = InteractTargetKind.fromId(stringValue(arguments,
+                                "target_kind", entityId.isBlank()
+                                        ? InteractTargetKind.BLOCK.id()
+                                        : InteractTargetKind.ENTITY.id()));
+                        button = InteractButton.fromId(
+                                stringValue(arguments, "button", InteractButton.RIGHT.id()));
+                        hand = InteractHand.fromId(
+                                stringValue(arguments, "hand", InteractHand.MAIN.id()));
+                    } catch (IllegalArgumentException exception) {
+                        return ToolResult.rejected("invalid_params", exception.getMessage());
+                    }
+                    if (targetKind == InteractTargetKind.ENTITY && entityId.isBlank()) {
+                        return ToolResult.rejected("invalid_params",
+                                "entity targets require entity_id");
+                    }
+                    if (targetKind != InteractTargetKind.ENTITY
+                            && !(arguments.containsKey("x") && arguments.containsKey("y")
+                            && arguments.containsKey("z"))) {
+                        return ToolResult.rejected("invalid_params",
+                                "x, y and z are required for block and air targets");
+                    }
+                    return backend.interact(id.get(), new InteractRequest(targetKind,
+                            intValue(arguments, "x"), intValue(arguments, "y"),
+                            intValue(arguments, "z"), entityId, button, hand,
+                            booleanValue(arguments, "sneak", false),
+                            booleanValue(arguments, "replace", true)));
                 });
 
         registry.register(new ToolSpec(
@@ -416,6 +495,18 @@ public final class CompanionTools {
             return number.intValue();
         }
         return 0;
+    }
+
+    private static double doubleValue(Map<String, Object> arguments, String name,
+            double fallback) {
+        Object raw = arguments.get(name);
+        return raw instanceof Number number ? number.doubleValue() : fallback;
+    }
+
+    private static boolean booleanValue(Map<String, Object> arguments, String name,
+            boolean fallback) {
+        Object raw = arguments.get(name);
+        return raw instanceof Boolean value ? value : fallback;
     }
 
     private static String stringValue(Map<String, Object> arguments, String name,

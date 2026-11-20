@@ -88,6 +88,10 @@ public record ToolSpec(
             return new ToolParameter(ParameterType.INTEGER, description, false, minimum);
         }
 
+        public static ToolParameter optionalInteger(String description) {
+            return optional(ParameterType.INTEGER, description);
+        }
+
         public static ToolParameter requiredNumberWithMinimum(String description, double minimum) {
             return new ToolParameter(ParameterType.NUMBER, description, true, minimum);
         }

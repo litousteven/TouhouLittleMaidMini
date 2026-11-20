@@ -2,9 +2,16 @@ package com.touhoulittlemaid.mini.fabric.mcp;
 
 import com.touhoulittlemaid.mini.core.CompanionSnapshot;
 import com.touhoulittlemaid.mini.core.ContextQuery;
+import com.touhoulittlemaid.mini.core.InteractButton;
+import com.touhoulittlemaid.mini.core.InteractHand;
+import com.touhoulittlemaid.mini.core.InteractRequest;
+import com.touhoulittlemaid.mini.core.InteractTargetKind;
 import com.touhoulittlemaid.mini.core.InventoryRequest;
 import com.touhoulittlemaid.mini.core.InventoryTarget;
 import com.touhoulittlemaid.mini.core.LocalBehavior;
+import com.touhoulittlemaid.mini.core.MoveMode;
+import com.touhoulittlemaid.mini.core.MoveRequest;
+import com.touhoulittlemaid.mini.core.MoveTargetKind;
 import com.touhoulittlemaid.mini.core.ToolResult;
 import com.touhoulittlemaid.mini.fabric.config.CompanionConfigs;
 import com.touhoulittlemaid.mini.fabric.entity.CompanionEntity;
@@ -23,8 +30,10 @@ import java.util.function.Function;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.tags.TagKey;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.phys.Vec3;
 
 /**
  * Bridges MCP tool calls onto live Fabric companions.
@@ -63,17 +72,55 @@ public final class FabricCompanionBackend implements CompanionTools.CompanionBac
     }
 
     @Override
-    public ToolResult move(UUID companionId, int x, int y, int z, double speed) {
+    public ToolResult move(UUID companionId, MoveRequest request) {
         return runOnServer(ignored -> withCompanion(companionId, companion -> {
             if (companion.isSafetyStopped()) {
                 return ToolResult.rejected("unsafe_area",
                         "companion health is too low to accept body actions");
             }
-            companion.getNavigation().moveTo(x + 0.5D, y, z + 0.5D, speed);
+            if (!request.replace() && !companion.getNavigation().isDone()) {
+                return ToolResult.rejected("busy",
+                        "companion is already moving; pass replace=true to interrupt");
+            }
+
+            var level = companion.level();
+            Vec3 target;
+            if (request.targetKind() == MoveTargetKind.ENTITY) {
+                net.minecraft.world.entity.Entity entity = level instanceof ServerLevel serverLevel
+                        ? serverLevel.getEntityInAnyDimension(java.util.UUID.fromString(
+                                request.entityId()))
+                        : null;
+                if (entity == null) {
+                    return ToolResult.rejected("not_found",
+                            "No loaded entity with id " + request.entityId());
+                }
+                target = entity.position();
+            } else {
+                target = new Vec3(request.x() + 0.5D, request.y(), request.z() + 0.5D);
+            }
+
+            Vec3 start = companion.position();
+            Vec3 destination = target;
+            if (request.mode() == MoveMode.AWAY) {
+                Vec3 away = start.subtract(target);
+                if (away.lengthSqr() < 1.0E-4D) {
+                    return ToolResult.rejected("no_path",
+                            "companion is already at the target position");
+                }
+                destination = start.add(away.normalize().scale(Math.max(1.0D, request.distance())));
+            } else if (request.distance() > 0.05D) {
+                Vec3 delta = target.subtract(start);
+                if (delta.length() > request.distance()) {
+                    destination = target.subtract(
+                            delta.normalize().scale(request.distance()));
+                }
+            }
+
+            companion.getNavigation().moveTo(destination.x, destination.y, destination.z, 1.0D);
             events.publish(companionId.toString(), "operation_started",
-                    "{\"action\":\"move\"}");
-            return ToolResult.ok("moving",
-                    "moving " + companionId + " to " + x + "," + y + "," + z);
+                    "{\"action\":\"move\",\"mode\":\"" + request.mode().id() + "\"}");
+            return ToolResult.ok("moving", "moving " + companionId + " "
+                    + request.mode().id() + " " + request.targetKind().id());
         }));
     }
 
@@ -86,38 +133,85 @@ public final class FabricCompanionBackend implements CompanionTools.CompanionBac
      * {@code HarvestFarmland} does for villagers. That is the interaction this exposes.
      */
     @Override
-    public ToolResult interact(UUID companionId, int x, int y, int z) {
+    public ToolResult interact(UUID companionId, InteractRequest request) {
         return runOnServer(ignored -> withCompanion(companionId, companion -> {
             if (companion.isSafetyStopped()) {
                 return ToolResult.rejected("unsafe_area",
                         "companion health is too low to accept body actions");
             }
-            var level = companion.level();
-            var pos = new net.minecraft.core.BlockPos(x, y, z);
-            if (!level.isLoaded(pos)) {
-                return ToolResult.rejected("not_loaded", "block is not loaded");
+            if (!request.replace() && !companion.getNavigation().isDone()) {
+                return ToolResult.rejected("busy",
+                        "companion is already moving; pass replace=true to interrupt");
             }
-
-            var state = level.getBlockState(pos);
-            String blockId = state.getBlock().builtInRegistryHolder().key().identifier().toString();
-
-            if (state.getBlock() instanceof net.minecraft.world.level.block.CropBlock crop) {
-                if (!crop.isMaxAge(state)) {
-                    return ToolResult.rejected("not_ready", "crop is not fully grown: " + blockId);
-                }
-                boolean harvested = level.destroyBlock(pos, true, companion);
-                if (!harvested) {
-                    return ToolResult.rejected("internal_error", "harvest failed: " + blockId);
-                }
-                events.publish(companionId.toString(), "operation_completed",
-                        "{\"action\":\"harvest\",\"block\":\"" + blockId + "\"}");
-                return ToolResult.ok("harvested", "harvested " + blockId);
+            if (request.targetKind() != InteractTargetKind.BLOCK) {
+                return ToolResult.rejected("unsupported_interaction",
+                        "Only block interactions are exposed; " + request.targetKind().id()
+                                + " interactions need a player context");
             }
-
-            return ToolResult.rejected("unsupported_interaction",
-                    "No supported block interaction for " + blockId
-                            + "; only fully grown crops are handled in M2");
+            if (request.button() != InteractButton.RIGHT) {
+                return ToolResult.rejected("unsupported_interaction",
+                        "Left-click semantics are not exposed yet");
+            }
+            return interactWithBlock(companionId, companion, request);
         }));
+    }
+
+    private ToolResult interactWithBlock(UUID companionId, CompanionEntity companion,
+            InteractRequest request) {
+        var level = companion.level();
+        var pos = new net.minecraft.core.BlockPos(request.x(), request.y(), request.z());
+        if (!level.isLoaded(pos)) {
+            return ToolResult.rejected("not_loaded", "block is not loaded");
+        }
+
+        var state = level.getBlockState(pos);
+        String stateId = blockId(state);
+
+        if (state.getBlock() instanceof net.minecraft.world.level.block.CropBlock crop) {
+            if (!crop.isMaxAge(state)) {
+                return ToolResult.rejected("not_ready", "crop is not fully grown: " + stateId);
+            }
+            boolean harvested = level.destroyBlock(pos, true, companion);
+            if (!harvested) {
+                return ToolResult.rejected("internal_error", "harvest failed: " + stateId);
+            }
+            events.publish(companionId.toString(), "operation_completed",
+                    "{\"action\":\"harvest\",\"block\":\"" + stateId + "\"}");
+            return ToolResult.ok("harvested", "harvested " + stateId);
+        }
+
+        if (state.isAir() && level.getBlockState(pos.below()).getBlock()
+                instanceof net.minecraft.world.level.block.FarmlandBlock
+                && plantSeed(companion, pos, request.hand())) {
+            return ToolResult.ok("planted", "planted a crop at " + pos.toShortString());
+        }
+
+        return ToolResult.rejected("unsupported_interaction",
+                "No supported block interaction for " + stateId
+                        + "; supported: mature crop harvest and replanting on farmland");
+    }
+
+    /**
+     * Replants exactly like vanilla {@code HarvestFarmland}: take a plantable
+     * {@code BlockItem} from the selected hand, set the crop block, and consume one.
+     */
+    private static boolean plantSeed(CompanionEntity companion, net.minecraft.core.BlockPos pos,
+            InteractHand hand) {
+        net.minecraft.world.entity.EquipmentSlot slot = hand == InteractHand.OFF
+                ? net.minecraft.world.entity.EquipmentSlot.OFFHAND
+                : net.minecraft.world.entity.EquipmentSlot.MAINHAND;
+        ItemStack stack = companion.getItemBySlot(slot);
+        if (stack.isEmpty() || !(stack.getItem() instanceof net.minecraft.world.item.BlockItem blockItem)
+                || !(blockItem.getBlock() instanceof net.minecraft.world.level.block.CropBlock)) {
+            return false;
+        }
+        var place = blockItem.getBlock().defaultBlockState();
+        if (!companion.level().setBlockAndUpdate(pos, place)) {
+            return false;
+        }
+        stack.shrink(1);
+        companion.setItemSlot(slot, stack.isEmpty() ? ItemStack.EMPTY : stack);
+        return true;
     }
 
     @Override

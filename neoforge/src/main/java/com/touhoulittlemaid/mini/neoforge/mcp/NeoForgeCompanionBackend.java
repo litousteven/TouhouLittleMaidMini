@@ -31,12 +31,14 @@ public final class NeoForgeCompanionBackend implements CompanionTools.CompanionB
     }
 
     @Override
-    public ToolResult move(UUID companionId, int x, int y, int z, double speed) {
+    public ToolResult move(UUID companionId,
+            com.touhoulittlemaid.mini.core.MoveRequest request) {
         return unavailable();
     }
 
     @Override
-    public ToolResult interact(UUID companionId, int x, int y, int z) {
+    public ToolResult interact(UUID companionId,
+            com.touhoulittlemaid.mini.core.InteractRequest request) {
         return unavailable();
     }
 

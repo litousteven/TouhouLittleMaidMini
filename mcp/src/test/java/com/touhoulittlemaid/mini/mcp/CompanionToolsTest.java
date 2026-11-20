@@ -26,7 +26,8 @@ class CompanionToolsTest {
     private static final class RecordingBackend implements CompanionTools.CompanionBackend {
         private final AtomicInteger waits = new AtomicInteger();
         private LocalBehavior lastBehavior;
-        private int[] lastMove;
+        private com.touhoulittlemaid.mini.core.MoveRequest lastMove;
+        private com.touhoulittlemaid.mini.core.InteractRequest lastInteract;
         private UUID lastStop;
         private String said;
         private com.touhoulittlemaid.mini.core.ContextQuery lastContext;
@@ -48,13 +49,16 @@ class CompanionToolsTest {
         }
 
         @Override
-        public ToolResult move(UUID companionId, int x, int y, int z, double speed) {
-            lastMove = new int[] {x, y, z};
+        public ToolResult move(UUID companionId,
+                com.touhoulittlemaid.mini.core.MoveRequest request) {
+            lastMove = request;
             return ToolResult.ok("moving", "moving");
         }
 
         @Override
-        public ToolResult interact(UUID companionId, int x, int y, int z) {
+        public ToolResult interact(UUID companionId,
+                com.touhoulittlemaid.mini.core.InteractRequest request) {
+            lastInteract = request;
             return ToolResult.ok("interacted", "interacted");
         }
 
@@ -281,6 +285,90 @@ class CompanionToolsTest {
                 "tags", List.of(1, 2)));
         assertEquals(ToolResult.Status.REJECTED, result.status());
         assertEquals("invalid_params", result.code());
+    }
+
+    @Test
+    void moveCarriesTargetKindModeDistanceAndReplace() {
+        RecordingBackend backend = new RecordingBackend();
+        ToolResult result = registry(backend).invoke("companion_move", Map.of(
+                "companion_id", COMPANION.toString(),
+                "target_kind", "position",
+                "x", 10, "y", 64, "z", -2,
+                "mode", "away",
+                "distance", 3.5,
+                "replace", false));
+
+        assertEquals(ToolResult.Status.OK, result.status());
+        var request = backend.lastMove;
+        assertEquals(com.touhoulittlemaid.mini.core.MoveTargetKind.POSITION,
+                request.targetKind());
+        assertEquals(com.touhoulittlemaid.mini.core.MoveMode.AWAY, request.mode());
+        assertEquals(3.5, request.distance());
+        assertEquals(false, request.replace());
+        assertEquals(10, request.x());
+    }
+
+    @Test
+    void moveToEntityUsesTheEntityIDAndDefaults() {
+        RecordingBackend backend = new RecordingBackend();
+        registry(backend).invoke("companion_move", Map.of(
+                "companion_id", COMPANION.toString(),
+                "entity_id", "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"));
+        assertEquals(com.touhoulittlemaid.mini.core.MoveTargetKind.ENTITY,
+                backend.lastMove.targetKind());
+        assertEquals("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee", backend.lastMove.entityId());
+        assertEquals(com.touhoulittlemaid.mini.core.MoveMode.GOTO,
+                backend.lastMove.mode());
+        assertEquals(1.0, backend.lastMove.distance());
+    }
+
+    @Test
+    void moveRejectsMissingCoordinatesAndMissingEntityID() {
+        ToolRegistry registry = registry(new RecordingBackend());
+        ToolResult noCoords = registry.invoke("companion_move", Map.of(
+                "companion_id", COMPANION.toString()));
+        assertEquals(ToolResult.Status.REJECTED, noCoords.status());
+        assertEquals("invalid_params", noCoords.code());
+
+        ToolResult noEntity = registry.invoke("companion_move", Map.of(
+                "companion_id", COMPANION.toString(),
+                "target_kind", "entity"));
+        assertEquals(ToolResult.Status.REJECTED, noEntity.status());
+        assertEquals("invalid_params", noEntity.code());
+    }
+
+    @Test
+    void interactCarriesButtonHandAndFlags() {
+        RecordingBackend backend = new RecordingBackend();
+        ToolResult result = registry(backend).invoke("companion_interact", Map.of(
+                "companion_id", COMPANION.toString(),
+                "x", 1, "y", 2, "z", 3,
+                "button", "left",
+                "hand", "off",
+                "sneak", true,
+                "replace", false));
+
+        assertEquals(ToolResult.Status.OK, result.status());
+        var request = backend.lastInteract;
+        assertEquals(com.touhoulittlemaid.mini.core.InteractButton.LEFT, request.button());
+        assertEquals(com.touhoulittlemaid.mini.core.InteractHand.OFF, request.hand());
+        assertTrue(request.sneak());
+        assertFalse(request.replace());
+        assertEquals(3, request.z());
+    }
+
+    @Test
+    void interactDefaultsToRightHandBlock() {
+        RecordingBackend backend = new RecordingBackend();
+        registry(backend).invoke("companion_interact", Map.of(
+                "companion_id", COMPANION.toString(),
+                "x", 1, "y", 2, "z", 3));
+        assertEquals(com.touhoulittlemaid.mini.core.InteractTargetKind.BLOCK,
+                backend.lastInteract.targetKind());
+        assertEquals(com.touhoulittlemaid.mini.core.InteractButton.RIGHT,
+                backend.lastInteract.button());
+        assertEquals(com.touhoulittlemaid.mini.core.InteractHand.MAIN,
+                backend.lastInteract.hand());
     }
 
     @Test

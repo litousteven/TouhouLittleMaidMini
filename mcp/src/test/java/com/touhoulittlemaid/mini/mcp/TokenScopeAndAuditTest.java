@@ -156,14 +156,14 @@ class TokenScopeAndAuditTest {
         }
 
         @Override
-        public com.touhoulittlemaid.mini.core.ToolResult move(
-                java.util.UUID id, int x, int y, int z, double speed) {
+        public com.touhoulittlemaid.mini.core.ToolResult move(java.util.UUID id,
+                com.touhoulittlemaid.mini.core.MoveRequest request) {
             return com.touhoulittlemaid.mini.core.ToolResult.ok("moving", "moving");
         }
 
         @Override
-        public com.touhoulittlemaid.mini.core.ToolResult interact(
-                java.util.UUID id, int x, int y, int z) {
+        public com.touhoulittlemaid.mini.core.ToolResult interact(java.util.UUID id,
+                com.touhoulittlemaid.mini.core.InteractRequest request) {
             return com.touhoulittlemaid.mini.core.ToolResult.ok("interacted", "interacted");
         }
 

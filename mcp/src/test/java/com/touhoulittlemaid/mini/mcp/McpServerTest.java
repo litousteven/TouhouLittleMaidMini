@@ -78,9 +78,12 @@ class McpServerTest {
 
         JsonObject schema = move.getAsJsonObject("inputSchema");
         JsonArray required = schema.getAsJsonArray("required");
-        assertEquals(4, required.size());
+        assertEquals(1, required.size());
+        assertEquals("companion_id", required.get(0).getAsString());
         assertEquals("integer", schema.getAsJsonObject("properties")
                 .getAsJsonObject("x").get("type").getAsString());
+        assertEquals("boolean", schema.getAsJsonObject("properties")
+                .getAsJsonObject("replace").get("type").getAsString());
     }
 
     @Test
@@ -284,12 +287,14 @@ class McpServerTest {
         }
 
         @Override
-        public ToolResult move(UUID companionId, int x, int y, int z, double speed) {
+        public ToolResult move(UUID companionId,
+                com.touhoulittlemaid.mini.core.MoveRequest request) {
             return ToolResult.ok("moving", "moving");
         }
 
         @Override
-        public ToolResult interact(UUID companionId, int x, int y, int z) {
+        public ToolResult interact(UUID companionId,
+                com.touhoulittlemaid.mini.core.InteractRequest request) {
             return ToolResult.ok("interacted", "interacted");
         }
 

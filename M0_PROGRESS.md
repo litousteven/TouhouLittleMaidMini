@@ -243,10 +243,14 @@ M2 结论：**Go**。协议、认证、作用域、审计、幂等、事件、�
   不会凭空生成物品，`missing_item`、`inventory_full`、`busy` 均为显式结果。
 - `companion_inventory` 映射到 `INVENTORY` 动作族，只读 Token 不能再调用写动作；
   `companion_context category=inventory` 仍可用于只读观察。
-- 测试：core 新增上下文与背包请求模型测试；mcp 新增数组校验与 schema 测试；
-  `:fabric:runGameTestServer` → `All 34 required tests passed`。
+- `companion_move` 支持 `position/block/entity`、`goto/away`、停止距离、`replace` 与
+  `busy`；`companion_interact` 支持目标类型、左右键、主副手和 `sneak`。
+- 收获成熟作物后可从手部种子补种，复用原版 `HarvestFarmland` 语义；未成熟作物、
+  unsupported 交互和失败均有明确 code。
+- 测试：core 新增上下文、背包、移动/交互请求模型测试；mcp 新增数组校验与 schema
+  测试；`:fabric:runGameTestServer` → `All 38 required tests passed`。
 
-尚未完成：移动/交互扩展、长轮询、按同伴 Token 与游戏内授权、断线降级、日程与 Skill。
+尚未完成：事件长轮询、按同伴 Token 与游戏内授权、断线降级、日程与 Skill。
 
 ## 恢复工作
 

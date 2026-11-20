@@ -200,26 +200,25 @@ Token scope 之外的同伴不出现在结果中。
 {
   "request_id": "b820...",
   "companion_id": "6d3d...",
-  "target": {
-    "kind": "block",
-    "position": {"x": 120, "y": 64, "z": -35}
-  },
+  "target_kind": "block",
+  "x": 120,
+  "y": 64,
+  "z": -35,
   "mode": "goto",
   "distance": 2.0,
   "replace": true
 }
 ```
 
-`target.kind` 首版支持：
-
-- `position`
-- `block`
-- `entity`
+`target_kind` 支持 `position`、`block`、`entity`。实体目标使用 `entity_id` 而不需要
+坐标；未提供 `target_kind` 时，有 `entity_id` 按 `entity`，否则按 `block`。
 
 `mode`：
 
 - `goto`
-- `away`
+- `away`（从目标点向外退开 `distance` 格）
+
+`distance` 是停止距离；`replace=false` 时若身体已有一个移动操作则返回 `busy`。
 
 结果：
 
@@ -246,10 +245,10 @@ Token scope 之外的同伴不出现在结果中。
 {
   "request_id": "39c1...",
   "companion_id": "6d3d...",
-  "target": {
-    "kind": "block",
-    "position": {"x": 120, "y": 64, "z": -35}
-  },
+  "target_kind": "block",
+  "x": 120,
+  "y": 64,
+  "z": -35,
   "button": "right",
   "hand": "main",
   "sneak": false,
@@ -257,19 +256,21 @@ Token scope 之外的同伴不出现在结果中。
 }
 ```
 
-`target.kind`：
+`target_kind`：
 
 - `block`
-- `entity`
+- `entity`（需要 `entity_id`）
 - `air`
 
-语义：
+当前 `0.1` 实现的能力：
 
-- `right` 等同右键使用；对实体表示交互或骑乘。
-- `left` 首版只执行一次玩家攻击/点击语义。
-- 是否需要靠近、能否看见以及实际结果由身体判断。
-- 对他人容器、危险方块和保护实体仍经过权限层。
-- 具体物品选择由调用方先通过 `companion_inventory` 准备好。
+- `right` + `block` + 成熟作物：按原版 `destroyBlock(pos, true, entity)` 收获。
+- `right` + 空方块 + 下方耕地：从 `hand` 指向的手中选择可种植 `BlockItem` 并补种，
+  消耗一个物品，与村民 `HarvestFarmland` 的语义一致。
+- 未成熟作物返回 `not_ready`；其他方块、实体和空气交互明确返回
+  `unsupported_interaction`，不会伪造成功。
+- 具体物品选择由调用方先通过 `companion_inventory` 准备好；`sneak` 会被接受，但
+  不改变当前支持的动作。
 
 结果返回操作 ID；真实变化通过事件回传。
 
