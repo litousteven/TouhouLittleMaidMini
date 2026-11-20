@@ -1,0 +1,35 @@
+enabled = true
+host = "127.0.0.1"
+port = 8765
+require_token = true
+disconnect_grace_seconds = 60
+continue_operation_after_disconnect = false
+safe_mode_after_disconnect = "stay"
+max_companions = 16
+max_action_radius = 64
+event_retention_days = 7
+event_max_file_mb = 16
+
+[limits]
+max_concurrent_calls = 4
+max_calls_per_minute_per_token = 60
+max_failed_auth_per_minute_per_ip = 10
+default_tool_timeout_seconds = 90
+default_event_wait_seconds = 50
+
+[actions]
+enabled = [
+  "observe",
+  "move",
+  "interact",
+  "inventory",
+  "wait"
+]
+
+[safety]
+owner_confirmation_timeout_seconds = 120
+require_confirmation_for_other_players = true
+require_confirmation_for_named_mobs = true
+require_confirmation_for_villagers = true
+require_confirmation_for_other_containers = true
+

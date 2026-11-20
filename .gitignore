@@ -1,0 +1,16 @@
+.gradle/
+build/
+out/
+run/
+runs/
+.idea/
+.vscode/
+*.iml
+*.log
+.DS_Store
+
+# Local secrets and generated MCP credentials
+*.token
+*.secret
+.env
+

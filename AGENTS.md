@@ -1,0 +1,79 @@
+# TouhouLittleMaidMini 项目约定
+
+## 当前阶段
+
+当前只完成技术设计，尚未创建 Gradle 工程或游戏代码。开始实现后，先完成
+`docs/02-development-plan.md` 的 M0 技术验证，再进入实体与 MCP 功能开发。
+
+## 不可改变的边界
+
+- 目标平台是 Minecraft `26.3`、NeoForge、Java 25。
+- 外部 Agent CLI 是唯一模型大脑；发行模组不得包含 API Key、LLM SDK、STT 或 TTS。
+- 不为每种作物、工作或模组新增一个 Java Task。玩法决策必须优先由 Agent、Skill、
+  数据标签和通用动作组合完成。
+- MCP 默认只能绑定回环地址，专用服默认关闭。
+- 不提供任意命令、任意脚本、反射执行或服务器控制台工具。
+- 世界修改动作必须经过权限、事件和审计的唯一入口。
+- 不把 TouhouLittleMaid 的内部类作为首版依赖。
+
+## 设计真源
+
+- 愿景与边界：[`docs/00-project-charter.md`](docs/00-project-charter.md)
+- 架构：[`docs/01-technical-design.md`](docs/01-technical-design.md)
+- 阶段与验收：[`docs/02-development-plan.md`](docs/02-development-plan.md)
+- 测试和调试：[`docs/03-testing-and-debugging.md`](docs/03-testing-and-debugging.md)
+- MCP 契约：[`docs/04-mcp-contract.md`](docs/04-mcp-contract.md)
+- Skill 与模组适配：[`docs/05-skill-and-extension-model.md`](docs/05-skill-and-extension-model.md)
+- 版本升级 Runbook：[`docs/06-version-upgrade-playbook.md`](docs/06-version-upgrade-playbook.md)
+
+设计变化先改文档，再改实现。实现与文档冲突时，不能默认文档错误；必须明确决定哪一份
+是新的真源。
+
+## 代码边界
+
+开始建立 Gradle 工程后，目录目标为：
+
+```text
+core/      纯 Java 的通用动作、事件和状态模型
+mcp/       MCP host、参数解码和协议映射
+neoforge/  实体、Brain、动作执行器、注册和持久化
+client/    渲染、界面和客户端同步
+```
+
+`core` 与 `mcp` 不得 import Minecraft 或 NeoForge。HTTP 线程不得直接修改世界；所有身体
+动作必须切到服务端主线程执行。
+
+## 验证顺序
+
+1. 修改纯模型：运行相关 JVM 单测。
+2. 修改 MCP：运行协议测试、认证与幂等测试。
+3. 修改实体、本地行为或动作执行器：运行相关 GameTest。
+4. 修改 MCP 到实体的接缝：运行最小 CLI E2E。
+5. 交付阶段成果前运行完整构建和本阶段验收脚本。
+
+失败时查根因，不用重复运行掩盖不稳定测试。涉及服务端线程、动作或重连的回归不得只靠
+单测证明。
+
+## 日志规则
+
+- 禁止记录 Token、完整背包、聊天正文和本机绝对路径。
+- Tool 日志只写 request ID、Token 摘要 ID、工具名、companion ID、耗时、结果码。
+- 调试开关可以增加序号、耗时和状态迁移，但不能扩大敏感数据范围。
+
+## 变更规则
+
+- MCP 工具名进入 `0.1` 后保持稳定。
+- 新字段优先以可选字段加入；删除或重命名字段需要新 major schema 版本。
+- 新玩法先尝试 Skill、数据标签和现有动作组合。
+- 只有逐刻控制、客户端专属交互或安全性不能在 Agent 层可靠完成时，才新增 Java Provider。
+- 新 Provider 必须复用 Action、Event、Permission 和 Audit 的现有入口。
+- 新增世界修改能力必须同时更新测试矩阵和安全文档。
+
+## 升级规则
+
+- 与 Minecraft/NeoForge 强耦合的代码只放在 `neoforge/` 和 `client/`。
+- `core/`、`mcp/`、Skill 和动作 schema 不依赖具体 Minecraft 类。
+- 每个受支持游戏版本必须有一条迁移检查表，记录 API 重命名、包名变化和运行验证结果。
+- 不允许为了少写一个动作而把某种玩法逻辑放进 MCP 传输层。
+
+

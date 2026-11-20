@@ -1,0 +1,10 @@
+[mcp_servers.touhou_little_maid_mini]
+enabled = true
+required = false
+url = "http://127.0.0.1:8765/mcp"
+bearer_token_env_var = "TLMM_MCP_TOKEN"
+startup_timeout_sec = 15.0
+tool_timeout_sec = 90.0
+default_tools_approval_mode = "writes"
+supports_parallel_tool_calls = false
+
