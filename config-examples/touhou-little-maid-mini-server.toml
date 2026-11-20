@@ -7,6 +7,9 @@ continue_operation_after_disconnect = false
 safe_mode_after_disconnect = "stay"
 max_companions = 16
 max_action_radius = 64
+default_work_radius = 16
+hunger_decay_seconds = 30
+low_health_percent = 30
 event_retention_days = 7
 event_max_file_mb = 16
 

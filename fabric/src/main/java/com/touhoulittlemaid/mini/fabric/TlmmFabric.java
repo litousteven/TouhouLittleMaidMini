@@ -2,10 +2,13 @@ package com.touhoulittlemaid.mini.fabric;
 
 import com.touhoulittlemaid.mini.core.PlatformState;
 import com.touhoulittlemaid.mini.fabric.command.CompanionCommands;
+import com.touhoulittlemaid.mini.fabric.config.CompanionConfigs;
 import com.touhoulittlemaid.mini.fabric.content.FabricContent;
 import com.touhoulittlemaid.mini.fabric.mcp.FabricCompanionBackend;
 import com.touhoulittlemaid.mini.fabric.persistence.M0SavedData;
+import com.touhoulittlemaid.mini.fabric.runtime.CompanionRuntimeState;
 import com.touhoulittlemaid.mini.mcp.CompanionTools;
+import com.touhoulittlemaid.mini.mcp.EventBus;
 import com.touhoulittlemaid.mini.mcp.McpServer;
 import com.touhoulittlemaid.mini.mcp.McpServerConfig;
 import com.touhoulittlemaid.mini.mcp.TokenScope;
@@ -35,11 +38,15 @@ public final class TlmmFabric implements ModInitializer {
         ServerLifecycleEvents.SERVER_STARTED.register(server -> {
             int saveVersion = M0SavedData.get(server).value();
             LOGGER.info("[m0] saved-data baseline value={}", saveVersion);
+            CompanionConfigs.load();
+            CompanionRuntimeState.install(new EventBus());
+            CompanionRuntimeState.setMcpConnected(false);
             state.set(state.get().ready());
             startMcp(server);
         });
         ServerLifecycleEvents.SERVER_STOPPED.register(server -> {
             stopMcp();
+            CompanionConfigs.reset();
             state.set(PlatformState.starting(MOD_VERSION, MINECRAFT_VERSION));
         });
         LOGGER.info("Touhou Little Maid Mini {} initialized on Fabric for Minecraft {}",
@@ -63,16 +70,19 @@ public final class TlmmFabric implements ModInitializer {
         int port = Integer.getInteger("tlmm.mcp.port", 8765);
         McpServer candidate = new McpServer(
                 new McpServerConfig(McpServerConfig.LOOPBACK, port, token),
-                CompanionTools.registry(new FabricCompanionBackend(server)),
+                CompanionTools.registry(new FabricCompanionBackend(server,
+                        CompanionRuntimeState.eventBus())),
                 scopeFromEnvironment(),
                 event -> LOGGER.info(event.format()));
         try {
             candidate.start();
             mcpServer = candidate;
+            CompanionRuntimeState.setMcpConnected(true);
             LOGGER.info("[mcp] listening on http://{}:{}{}", McpServerConfig.LOOPBACK,
                     candidate.port(), McpServer.PATH);
         } catch (Exception exception) {
             candidate.close();
+            CompanionRuntimeState.setMcpConnected(false);
             LOGGER.error("[mcp] failed to start loopback endpoint", exception);
         }
     }
@@ -90,6 +100,7 @@ public final class TlmmFabric implements ModInitializer {
     private void stopMcp() {
         McpServer running = mcpServer;
         mcpServer = null;
+        CompanionRuntimeState.setMcpConnected(false);
         if (running != null) {
             running.close();
             LOGGER.info("[mcp] stopped");

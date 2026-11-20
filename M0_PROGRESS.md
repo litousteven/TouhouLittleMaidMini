@@ -1,11 +1,15 @@
-# M0 临时进度
+# 开发进度
 
-更新时间：`2026-11-20 21:20 CST`
+更新时间：`2026-11-20 22:10 CST`
 
 当前目标：Minecraft `26.3`、Fabric 首发、Java `25`。NeoForge 只保留后续适配，
-不作为 M0 门禁。
+不作为 `0.1` 门禁。
 
-**M0 全部门禁已通过，验收记录见 [`docs/validation/M0.md`](docs/validation/M0.md)。**
+**M0、M1、M2 已完成，M3 进行中。**
+
+- M0 验收：[`docs/validation/M0.md`](docs/validation/M0.md)
+- M1 验收：[`docs/validation/M1.md`](docs/validation/M1.md)
+- M2 验收：[`docs/validation/M2.md`](docs/validation/M2.md)
 
 ## Git 状态
 
@@ -149,30 +153,24 @@ $env:PATH="$env:JAVA_HOME\bin;$env:PATH"
 - 检查 `git status`、完整 diff、`git diff --check`。
 - 使用 Conventional Commit 创建 `M0` 完成提交。
 
-## M1 进度（进行中）
+## M1 进度：已完成
 
-已完成并验证：
+验收记录：[`docs/validation/M1.md`](docs/validation/M1.md)。
 
-- `core` 新增 `LocalBehavior`（stay/follow/guard）、`CompanionInventoryLayout`（9 格背包 +
-  6 格装备）、`CompanionSnapshot`，含 9 个纯 JVM 单测。
-- `CompanionEntity`：owner、名字、UUID、本地行为、home（维度 + 坐标）、9 格背包、
-  跟随/待机目标、`canAttack` 排除 owner。
-- 背包持久化按槽位显式存取。原用 `storeAsItemList`/`fromItemList` 会压缩列表并
-  丢失槽位索引，已被 GameTest 捕获并修复。
-- `tlmm summon|remove|rename|home|behavior` 命令；删除前阻断非空背包。
-- GameTest 共 10 个全部通过（3 个 M0 + 7 个 M1）。
-- 真实客户端截图确认 `tlmm:companion` 渲染。
+- `core` 新增 `LocalBehavior`、`CompanionInventoryLayout`、`CompanionSnapshot`、
+  `CompanionHunger`、`CompanionServerConfig`；配置与饥饿共 15 个单测。
+- `CompanionEntity`：owner、名字、UUID、本地行为、home、9 格背包、6 格装备、
+  生命/饥饿/进食/饥饿伤害、低血量安全反射、守卫目标与自卫。
+- `canAttack` 排除主人、玩家、村民和有主人的宠物。
+- `tlmm summon|remove|rename|home|behavior`；命令与界面删除前都要求背包和装备为空。
+- 右键 `CompanionMenu`：9 格背包、6 格装备、行为切换、home、删除二次确认、改名。
+- 服务端配置 `config/touhou-little-maid-mini-server.toml`，含默认值、校验与回退。
+- 行为、home、半径、背包摘要和 MCP 连接状态同步到客户端。
+- GameTest 共 26 个全部通过（含绕障碍跟随）；真实客户端 Gametest 截图
+  `0000_m1-companion-render.png`、`0001_m1-companion-screen.png`，界面按钮点击后
+  服务端行为切到 `guard`。
 
-尚未完成：
-
-- `guard` 行为的具体目标与自卫逻辑。
-- 生命、饥饿、进食与安全反射。
-- 装备槽实际实现（目前只有布局常量）。
-- 右键管理界面。
-- 服务端配置与服务端/客户端同步。
-- `docs/validation/M1.md` 与 M1 完成提交。
-
-## M2 进度（进行中）
+## M2 进度：已完成
 
 已完成并验证：
 
@@ -245,11 +243,16 @@ git log -3 --oneline --decorate
 .\gradlew.bat :core:test :mcp:test
 .\gradlew.bat :fabric:compileJava
 .\gradlew.bat :fabric:runGameTestServer
-.\gradlew.bat :fabric:runClientGametest -Ptlmm.graphicsBackend=vulkan
+.\gradlew.bat :fabric:runClientGametest '-Ptlmm.graphicsBackend=vulkan'
 .\gradlew.bat build
 ```
 
 本机开发客户端必须带 `-Ptlmm.graphicsBackend=vulkan`；不加会以 `0xC0000005` 崩溃。
+
+下一步是 M3：先做 `companion_context` 标签/实体过滤、`companion_inventory` 写动作
+与装备槽、移动/交互扩展，再做长轮询、按同伴 Token 与游戏内授权、断线降级、日程与
+Skill。服务端配置位于 `config/touhou-little-maid-mini-server.toml`，示例见
+`config-examples/`。
 
 macOS 旧环境（已不再使用，仅存档）：
 
@@ -279,6 +282,5 @@ run/clientGametest/logs/debug.log
 - 本地 E2E 使用临时测试 Token；不要把实际 Token 写进仓库或日志。
 - `run/`、`runs/`、`.gradle/` 和构建产物均被 Git 忽略。
 - 重启前应正常停止 Fabric server 和 Client GameTest，避免世界锁或缓存锁残留。
-- 记录本文件时，Fabric server 已通过控制台 `stop` 保存世界并正常退出；卡住的
-  Client GameTest 已通过 `SIGTERM` 结束。已确认没有遗留 client/server 进程，
-  TCP `8765` 和 `25565` 均无监听。
+- 最近一次验证中 GameTest 服务端与 Client Gametest 均正常退出；未发现遗留
+  client/server 进程或占用端口。

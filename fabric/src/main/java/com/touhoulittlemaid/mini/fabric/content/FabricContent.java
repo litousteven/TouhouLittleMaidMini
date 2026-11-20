@@ -47,5 +47,6 @@ public final class FabricContent {
     public static void register() {
         FabricDefaultAttributeRegistry.register(COMPANION, Animal.createAnimalAttributes());
         FabricDefaultAttributeRegistry.register(DEBUG_COMPANION, Mob.createMobAttributes());
+        com.touhoulittlemaid.mini.fabric.menu.CompanionMenus.register();
     }
 }

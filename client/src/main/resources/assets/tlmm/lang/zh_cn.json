@@ -1,0 +1,19 @@
+{
+  "gui.tlmm.companion.title": "%s",
+  "gui.tlmm.companion.set_home": "设为家",
+  "gui.tlmm.companion.clear_home": "清除家",
+  "gui.tlmm.companion.delete": "删除",
+  "gui.tlmm.companion.confirm_delete": "确认删除",
+  "gui.tlmm.companion.delete_blocked": "请先清空背包和装备再删除同伴",
+  "gui.tlmm.companion.deleted": "已移除 %s",
+  "gui.tlmm.companion.name": "同伴名字",
+  "gui.tlmm.companion.name_hint": "新名字",
+  "gui.tlmm.companion.rename": "改名",
+  "gui.tlmm.companion.behavior.stay": "待命",
+  "gui.tlmm.companion.behavior.follow": "跟随",
+  "gui.tlmm.companion.behavior.guard": "守卫",
+  "gui.tlmm.companion.stats_health": "生命 %s/%s   饥饿 %s",
+  "gui.tlmm.companion.stats_other": "半径 %s   背包 %s/9   装备 %s",
+  "gui.tlmm.mcp_on": "MCP 已连接",
+  "gui.tlmm.mcp_off": "MCP 未连接"
+}

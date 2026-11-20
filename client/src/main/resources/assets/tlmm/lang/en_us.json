@@ -1,0 +1,19 @@
+{
+  "gui.tlmm.companion.title": "%s",
+  "gui.tlmm.companion.set_home": "Set home",
+  "gui.tlmm.companion.clear_home": "Clear home",
+  "gui.tlmm.companion.delete": "Delete",
+  "gui.tlmm.companion.confirm_delete": "Confirm delete",
+  "gui.tlmm.companion.delete_blocked": "Empty the backpack and equipment before deleting this companion",
+  "gui.tlmm.companion.deleted": "Removed %s",
+  "gui.tlmm.companion.name": "Companion name",
+  "gui.tlmm.companion.name_hint": "New name",
+  "gui.tlmm.companion.rename": "Rename",
+  "gui.tlmm.companion.behavior.stay": "Stay",
+  "gui.tlmm.companion.behavior.follow": "Follow",
+  "gui.tlmm.companion.behavior.guard": "Guard",
+  "gui.tlmm.companion.stats_health": "Health %s/%s   Hunger %s",
+  "gui.tlmm.companion.stats_other": "Radius %s   Bag %s/9   Eq %s",
+  "gui.tlmm.mcp_on": "MCP on",
+  "gui.tlmm.mcp_off": "MCP off"
+}

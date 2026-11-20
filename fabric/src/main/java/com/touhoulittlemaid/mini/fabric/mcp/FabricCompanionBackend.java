@@ -30,11 +30,16 @@ public final class FabricCompanionBackend implements CompanionTools.CompanionBac
     private static final long REQUEST_TIMEOUT_SECONDS = 10L;
 
     private final MinecraftServer server;
-    private final com.touhoulittlemaid.mini.mcp.EventBus events =
-            new com.touhoulittlemaid.mini.mcp.EventBus();
+    private final com.touhoulittlemaid.mini.mcp.EventBus events;
 
     public FabricCompanionBackend(MinecraftServer server) {
+        this(server, new com.touhoulittlemaid.mini.mcp.EventBus());
+    }
+
+    public FabricCompanionBackend(MinecraftServer server,
+            com.touhoulittlemaid.mini.mcp.EventBus events) {
         this.server = server;
+        this.events = java.util.Objects.requireNonNull(events, "events");
     }
 
     @Override
@@ -52,7 +57,13 @@ public final class FabricCompanionBackend implements CompanionTools.CompanionBac
     @Override
     public ToolResult move(UUID companionId, int x, int y, int z, double speed) {
         return runOnServer(ignored -> withCompanion(companionId, companion -> {
+            if (companion.isSafetyStopped()) {
+                return ToolResult.rejected("unsafe_area",
+                        "companion health is too low to accept body actions");
+            }
             companion.getNavigation().moveTo(x + 0.5D, y, z + 0.5D, speed);
+            events.publish(companionId.toString(), "operation_started",
+                    "{\"action\":\"move\"}");
             return ToolResult.ok("moving",
                     "moving " + companionId + " to " + x + "," + y + "," + z);
         }));
@@ -69,6 +80,10 @@ public final class FabricCompanionBackend implements CompanionTools.CompanionBac
     @Override
     public ToolResult interact(UUID companionId, int x, int y, int z) {
         return runOnServer(ignored -> withCompanion(companionId, companion -> {
+            if (companion.isSafetyStopped()) {
+                return ToolResult.rejected("unsafe_area",
+                        "companion health is too low to accept body actions");
+            }
             var level = companion.level();
             var pos = new net.minecraft.core.BlockPos(x, y, z);
             if (!level.isLoaded(pos)) {

@@ -60,7 +60,6 @@ public final class CompanionCommands {
         BlockPos target = player.blockPosition().relative(player.getDirection());
         companion.setPos(target.getX() + 0.5D, target.getY(), target.getZ() + 0.5D);
         companion.setOwner(player);
-        companion.setCompanionName(player.getGameProfile().name());
         companion.setBehavior(LocalBehavior.FOLLOW);
         level.addFreshEntity(companion);
         source.sendSuccess(() -> Component.literal("Summoned companion"), false);
