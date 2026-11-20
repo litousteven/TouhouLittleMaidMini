@@ -7,11 +7,13 @@ import com.touhoulittlemaid.mini.fabric.content.FabricContent;
 import com.touhoulittlemaid.mini.fabric.mcp.FabricCompanionBackend;
 import com.touhoulittlemaid.mini.fabric.persistence.M0SavedData;
 import com.touhoulittlemaid.mini.fabric.runtime.CompanionRuntimeState;
+import com.touhoulittlemaid.mini.mcp.CompanionTokenStore;
 import com.touhoulittlemaid.mini.mcp.CompanionTools;
 import com.touhoulittlemaid.mini.mcp.EventBus;
 import com.touhoulittlemaid.mini.mcp.McpServer;
 import com.touhoulittlemaid.mini.mcp.McpServerConfig;
 import com.touhoulittlemaid.mini.mcp.RollingEventLog;
+import com.touhoulittlemaid.mini.mcp.TokenAuthenticator;
 import com.touhoulittlemaid.mini.mcp.TokenScope;
 
 import java.nio.file.Path;
@@ -29,6 +31,8 @@ public final class TlmmFabric implements ModInitializer {
     public static final String MOD_VERSION = "0.1.0-alpha.1";
     public static final String MINECRAFT_VERSION = "26.3";
     public static final Logger LOGGER = LoggerFactory.getLogger(MOD_ID);
+
+    private static final CompanionTokenStore TOKEN_STORE = new CompanionTokenStore();
 
     private final AtomicReference<PlatformState> state =
             new AtomicReference<>(PlatformState.starting(MOD_VERSION, MINECRAFT_VERSION));
@@ -88,11 +92,15 @@ public final class TlmmFabric implements ModInitializer {
         }
 
         int port = Integer.getInteger("tlmm.mcp.port", 8765);
+        TokenAuthenticator environmentToken = TokenAuthenticator.staticToken(
+                token, scopeFromEnvironment());
+        TokenAuthenticator authenticator = bearer -> TOKEN_STORE.authenticate(bearer)
+                .or(() -> environmentToken.authenticate(bearer));
         McpServer candidate = new McpServer(
                 new McpServerConfig(McpServerConfig.LOOPBACK, port, token),
                 CompanionTools.registry(new FabricCompanionBackend(server,
                         CompanionRuntimeState.eventBus())),
-                scopeFromEnvironment(),
+                authenticator,
                 event -> LOGGER.info(event.format()));
         try {
             candidate.start();
@@ -115,6 +123,10 @@ public final class TlmmFabric implements ModInitializer {
         return "1".equals(System.getenv("TLMM_MCP_READ_ONLY"))
                 ? TokenScope.READ_ONLY
                 : TokenScope.FULL;
+    }
+
+    public static CompanionTokenStore tokenStore() {
+        return TOKEN_STORE;
     }
 
     private void stopMcp() {

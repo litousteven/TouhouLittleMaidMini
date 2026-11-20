@@ -42,9 +42,7 @@ public final class McpServer implements AutoCloseable {
     private final McpServerConfig config;
     private final ToolRegistry tools;
     private final Gson gson;
-    private final byte[] tokenDigest;
-    private final String tokenDigestId;
-    private final TokenScope scope;
+    private final TokenAuthenticator authenticator;
     private final AuditLog.Sink auditSink;
 
     /** Replays a repeated request_id so a retried call never runs the body twice. */
@@ -59,13 +57,17 @@ public final class McpServer implements AutoCloseable {
 
     public McpServer(McpServerConfig config, ToolRegistry tools,
             TokenScope scope, AuditLog.Sink auditSink) {
+        this(config, tools,
+                TokenAuthenticator.staticToken(config.bearerToken(), scope), auditSink);
+    }
+
+    public McpServer(McpServerConfig config, ToolRegistry tools,
+            TokenAuthenticator authenticator, AuditLog.Sink auditSink) {
         this.config = Objects.requireNonNull(config, "config");
         this.tools = Objects.requireNonNull(tools, "tools");
-        this.scope = Objects.requireNonNull(scope, "scope");
+        this.authenticator = Objects.requireNonNull(authenticator, "authenticator");
         this.auditSink = Objects.requireNonNull(auditSink, "auditSink");
         this.gson = new Gson();
-        this.tokenDigest = sha256(config.bearerToken());
-        this.tokenDigestId = AuditLog.digestId(config.bearerToken());
     }
 
     public synchronized void start() throws IOException {
@@ -119,7 +121,8 @@ public final class McpServer implements AutoCloseable {
                 sendJson(exchange, 404, error(null, -32600, "Not found"));
                 return;
             }
-            if (!authorized(exchange)) {
+            Optional<TokenPrincipal> principal = authenticate(exchange);
+            if (principal.isEmpty()) {
                 exchange.getResponseHeaders().set("WWW-Authenticate", "Bearer");
                 sendJson(exchange, 401, error(null, -32001, "Invalid bearer token"));
                 return;
@@ -129,7 +132,7 @@ public final class McpServer implements AutoCloseable {
                 sendJson(exchange, 405, error(null, -32600, "MCP Streamable HTTP endpoint expects POST"));
                 return;
             }
-            handlePost(exchange);
+            handlePost(exchange, principal.get());
         } catch (JsonParseException exception) {
             sendJson(exchange, 400, error(null, -32700, "Parse error"));
         } catch (RuntimeException exception) {
@@ -137,7 +140,7 @@ public final class McpServer implements AutoCloseable {
         }
     }
 
-    private void handlePost(HttpExchange exchange) throws IOException {
+    private void handlePost(HttpExchange exchange, TokenPrincipal principal) throws IOException {
         byte[] body = exchange.getRequestBody().readNBytes(MAX_BODY_BYTES + 1);
         if (body.length > MAX_BODY_BYTES) {
             sendJson(exchange, 413, error(null, -32600, "Request body too large"));
@@ -167,7 +170,7 @@ public final class McpServer implements AutoCloseable {
             case "initialize" -> initializeResult();
             case "ping" -> new JsonObject();
             case "tools/list" -> toolsListResult();
-            case "tools/call" -> callTool(request.get("params"));
+            case "tools/call" -> callTool(request.get("params"), principal);
             default -> null;
         };
         if (result == null) {
@@ -256,7 +259,7 @@ public final class McpServer implements AutoCloseable {
         return tool;
     }
 
-    private JsonObject callTool(JsonElement paramsElement) {
+    private JsonObject callTool(JsonElement paramsElement, TokenPrincipal principal) {
         if (paramsElement == null || !paramsElement.isJsonObject()) {
             return errorResult(ToolResult.rejected("invalid_params",
                     "tools/call requires an object"));
@@ -280,14 +283,16 @@ public final class McpServer implements AutoCloseable {
         }
 
         long startedAt = System.nanoTime();
-        ToolResult result = scopeCheck(toolName)
-                .orElseGet(() -> tools.invoke(toolName, arguments));
+        ToolResult result = scopeCheck(toolName, principal.scope())
+                .orElseGet(() -> CompanionTools.withAllowedCompanions(
+                        principal.companionIds(),
+                        () -> tools.invoke(toolName, arguments)));
         JsonObject response = errorResult(result);
 
         long durationMillis = (System.nanoTime() - startedAt) / 1_000_000L;
         auditSink.record(new AuditLog.AuditEvent(
                 requestId,
-                tokenDigestId,
+                principal.digestId(),
                 toolName,
                 AuditLog.companionId(arguments).orElse(null),
                 result.status().name(),
@@ -301,7 +306,7 @@ public final class McpServer implements AutoCloseable {
     }
 
     /** Returns a refusal when the token may not run this tool, or empty to proceed. */
-    private Optional<ToolResult> scopeCheck(String toolName) {
+    private Optional<ToolResult> scopeCheck(String toolName, TokenScope scope) {
         ActionKind kind;
         try {
             kind = TokenScope.actionOf(toolName);
@@ -434,14 +439,13 @@ public final class McpServer implements AutoCloseable {
         return response;
     }
 
-    private boolean authorized(HttpExchange exchange) {
+    private Optional<TokenPrincipal> authenticate(HttpExchange exchange) {
         String authorization = exchange.getRequestHeaders().getFirst("Authorization");
         String prefix = "Bearer ";
         if (authorization == null || !authorization.startsWith(prefix)) {
-            return false;
+            return Optional.empty();
         }
-        byte[] candidate = sha256(authorization.substring(prefix.length()));
-        return MessageDigest.isEqual(tokenDigest, candidate);
+        return authenticator.authenticate(authorization.substring(prefix.length()));
     }
 
     private void sendJson(HttpExchange exchange, int status, JsonElement body) throws IOException {
@@ -453,11 +457,4 @@ public final class McpServer implements AutoCloseable {
         exchange.getResponseBody().write(bytes);
     }
 
-    private static byte[] sha256(String value) {
-        try {
-            return MessageDigest.getInstance("SHA-256").digest(value.getBytes(StandardCharsets.UTF_8));
-        } catch (NoSuchAlgorithmException exception) {
-            throw new IllegalStateException("SHA-256 is unavailable", exception);
-        }
-    }
 }

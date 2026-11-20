@@ -1,23 +1,31 @@
 # MCP 开发连接
 
-本文件描述 M0-M2 阶段如何从本地 Agent CLI 连接开发端的 MCP 端点。
+本文件描述如何从本地 Agent CLI 连接开发端的 MCP 端点。
 
-## 1. 生成一次性 Token
+## 1. 生成 Token
 
-当前实现尚未提供 `/tlmm mcp token create` 命令。开发阶段用一个本地随机串作为
-Bearer Token，只通过环境变量传递：
+端点的启动仍需要一个开发环境 Token，仅通过环境变量传递：
 
 ```powershell
 $env:TLMM_MCP_TOKEN = -join ((48..57) + (97..122) | Get-Random -Count 32 | ForEach-Object { [char]$_ })
 ```
 
+进入游戏后可以签发按同伴授权的 Token（明文只显示一次）：
+
+```text
+/tlmm mcp token create 7          # 为当前拥有的同伴签发 7 天 Token
+/tlmm mcp token list              # 查看 id、摘要 ID、到期时间与同伴
+/tlmm mcp token revoke <token_id> # 立即撤销
+```
+
 规则：
 
-- Token 只存在于环境变量和进程内存中。
+- Token 只存在于环境变量、签发时的聊天提示和进程内存中；服务端只保存 SHA-256 摘要。
 - 不要把 Token 写进 `.codex/config.toml`、Git、日志或截图。
-- 每次重启开发服时重新生成即可。
-
-按同伴授权、作用域、撤销和过期属于 M3 的交付内容；M2 只实现整端点一个 Token。
+- 开发 Token 拥有所有同伴；签发的 Token 只允许访问发放时选中的同伴。
+- 当前 Token 存储是进程内内存，重启服务器后需要重新签发。
+- 破坏性动作（当前为丢弃物品）会要求游戏内真人确认：`/tlmm auth allow <id>` 或
+  `/tlmm auth deny <id>`；确认窗口默认 120 秒，一次授权只消费一次。
 
 ## 2. 启动开发服
 

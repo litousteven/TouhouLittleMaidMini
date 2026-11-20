@@ -123,11 +123,26 @@ public final class M3InventoryGameTests {
             throw helper.assertionException("sword did not reach the backpack");
         }
 
+        ToolResult pending = registry.invoke("companion_inventory", Map.of(
+                "companion_id", id(companion), "action", "drop",
+                "item", "minecraft:iron_sword", "count", 1));
+        if (!"permission_required".equals(pending.code())) {
+            throw helper.assertionException(
+                    "drop must ask for authorization first: " + pending.message());
+        }
+        String permissionId = pending.message()
+                .substring(pending.message().indexOf("permission_id=") + "permission_id=".length())
+                .strip();
+        if (!com.touhoulittlemaid.mini.fabric.permission.CompanionPermissions
+                .decide(permissionId, true)) {
+            throw helper.assertionException("could not approve the drop");
+        }
+
         ToolResult dropped = registry.invoke("companion_inventory", Map.of(
                 "companion_id", id(companion), "action", "drop",
                 "item", "minecraft:iron_sword", "count", 1));
         if (dropped.status() != ToolResult.Status.OK) {
-            throw helper.assertionException("drop failed: " + dropped.message());
+            throw helper.assertionException("drop failed after approval: " + dropped.message());
         }
         if (!companion.backpack().getItem(0).isEmpty()) {
             throw helper.assertionException("dropped item stayed in the backpack");

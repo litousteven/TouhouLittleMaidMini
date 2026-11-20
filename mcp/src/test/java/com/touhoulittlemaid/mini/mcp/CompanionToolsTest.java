@@ -446,6 +446,24 @@ class CompanionToolsTest {
     }
 
     @Test
+    void tokenScopeFiltersCompanionsAndRefusesOthers() {
+        RecordingBackend backend = new RecordingBackend();
+        ToolRegistry registry = registry(backend);
+        UUID other = UUID.fromString("99999999-9999-9999-9999-999999999999");
+
+        ToolResult denied = CompanionTools.withAllowedCompanions(java.util.Set.of(other),
+                () -> registry.invoke("companion_state", Map.of(
+                        "companion_id", COMPANION.toString())));
+        assertEquals(ToolResult.Status.REJECTED, denied.status());
+        assertEquals("scope_denied", denied.code());
+
+        ToolResult list = CompanionTools.withAllowedCompanions(java.util.Set.of(other),
+                () -> registry.invoke("companion_list", Map.of()));
+        assertEquals(ToolResult.Status.OK, list.status());
+        assertFalse(list.message().contains("Alice"));
+    }
+
+    @Test
     void unknownToolIsReportedAsSuch() {
         ToolResult result = registry(new RecordingBackend()).invoke("companion_delete_everything", Map.of());
 

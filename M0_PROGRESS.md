@@ -251,10 +251,16 @@ M2 结论：**Go**。协议、认证、作用域、审计、幂等、事件、�
   不等待。事件按同伴过滤，游标与保留窗口语义不变。
 - 事件通过有界队列写入按大小滚动、按天数清理的 `logs/tlmm-events-*.log`，不会阻塞
   服务器线程；配置项为 `event_retention_days`、`event_max_file_mb`。
+- 按同伴签发、撤销和过期 Token：`/tlmm mcp token create|list|revoke`；服务端只保存
+  SHA-256 摘要，工具调用按 Token 作用域过滤 `companion_list` 并拒绝越权同伴。
+- 破坏性 `drop` 动作经过 `PermissionBroker`：首次返回 `permission_required`，游戏内
+  可点击的 `/tlmm auth allow|deny <id>` 由 owner 或 OP 决定；允许只消费一次，拒绝在
+  有效期内持续生效。
 - 测试：core 新增上下文、背包、移动/交互请求模型测试；mcp 新增数组校验、schema、
-  长轮询与滚动日志测试；`:fabric:runGameTestServer` → `All 38 required tests passed`。
+  长轮询、滚动日志、权限票据与 Token 作用域测试；`:fabric:runGameTestServer` →
+  `All 38 required tests passed`。
 
-尚未完成：按同伴 Token 与游戏内授权、断线降级、日程与 Skill。
+尚未完成：断线降级、日程与 Skill。
 
 ## 恢复工作
 

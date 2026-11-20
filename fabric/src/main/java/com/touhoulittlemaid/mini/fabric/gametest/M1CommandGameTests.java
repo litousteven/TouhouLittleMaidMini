@@ -18,7 +18,8 @@ public final class M1CommandGameTests {
         if (dispatcher.getRoot().getChild("tlmm") == null) {
             throw helper.assertionException("tlmm command root was not registered");
         }
-        for (String sub : new String[] {"summon", "remove", "rename", "home", "behavior"}) {
+        for (String sub : new String[] {"summon", "remove", "rename", "home", "behavior", "auth",
+                "mcp"}) {
             if (dispatcher.getRoot().getChild("tlmm").getChild(sub) == null) {
                 throw helper.assertionException("tlmm " + sub + " subcommand was not registered");
             }

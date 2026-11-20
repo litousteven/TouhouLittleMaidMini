@@ -1,11 +1,18 @@
 package com.touhoulittlemaid.mini.fabric.command;
 
+import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.touhoulittlemaid.mini.core.LocalBehavior;
+import com.touhoulittlemaid.mini.fabric.TlmmFabric;
 import com.touhoulittlemaid.mini.fabric.content.FabricContent;
 import com.touhoulittlemaid.mini.fabric.entity.CompanionEntity;
+import com.touhoulittlemaid.mini.mcp.CompanionTokenStore;
+import com.touhoulittlemaid.mini.mcp.TokenScope;
 
+import java.time.Duration;
 import java.util.List;
+import java.util.Set;
+import java.util.UUID;
 
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.minecraft.commands.Commands;
@@ -41,7 +48,36 @@ public final class CompanionCommands {
                         .then(Commands.literal("behavior")
                                 .then(Commands.argument("behavior", StringArgumentType.word())
                                         .executes(context -> setBehavior(context.getSource(),
-                                                StringArgumentType.getString(context, "behavior")))))));
+                                                StringArgumentType.getString(context, "behavior")))))
+                        .then(Commands.literal("auth")
+                                .then(Commands.literal("allow")
+                                        .then(Commands.argument("id", StringArgumentType.word())
+                                                .executes(context -> decide(context.getSource(),
+                                                        StringArgumentType.getString(context, "id"),
+                                                        true))))
+                                .then(Commands.literal("deny")
+                                        .then(Commands.argument("id", StringArgumentType.word())
+                                                .executes(context -> decide(context.getSource(),
+                                                        StringArgumentType.getString(context, "id"),
+                                                        false)))))
+                        .then(Commands.literal("mcp")
+                                .then(Commands.literal("token")
+                                        .then(Commands.literal("create")
+                                                .then(Commands.argument("days",
+                                                                IntegerArgumentType.integer(1, 365))
+                                                        .executes(context -> createToken(
+                                                                context.getSource(),
+                                                                IntegerArgumentType.getInteger(
+                                                                        context, "days")))))
+                                        .then(Commands.literal("list")
+                                                .executes(context -> listTokens(context.getSource())))
+                                        .then(Commands.literal("revoke")
+                                                .then(Commands.argument("id",
+                                                                StringArgumentType.word())
+                                                        .executes(context -> revokeToken(
+                                                                context.getSource(),
+                                                                StringArgumentType.getString(
+                                                                        context, "id")))))))));
     }
 
     private static int summon(net.minecraft.commands.CommandSourceStack source) {
@@ -133,6 +169,66 @@ public final class CompanionCommands {
         }
         source.sendSuccess(() -> Component.literal("Companion behaviour set to " + behavior.id()), false);
         return companions.size();
+    }
+
+    private static int decide(net.minecraft.commands.CommandSourceStack source, String id,
+            boolean allow) {
+        ServerPlayer player = source.getPlayer();
+        if (player == null) {
+            source.sendFailure(Component.literal("tlmm auth must be run by a player"));
+            return 0;
+        }
+        if (!com.touhoulittlemaid.mini.fabric.permission.CompanionPermissions
+                .decide(player, id, allow)) {
+            source.sendFailure(Component.literal(
+                    "unknown, expired or not your permission request"));
+            return 0;
+        }
+        source.sendSuccess(() -> Component.literal(
+                allow ? "Permission allowed" : "Permission denied"), false);
+        return 1;
+    }
+
+    private static int createToken(net.minecraft.commands.CommandSourceStack source, int days) {
+        List<CompanionEntity> companions = ownedCompanions(source);
+        if (companions.isEmpty()) {
+            source.sendFailure(Component.literal("no owned companion to authorize"));
+            return 0;
+        }
+        Set<UUID> ids = companions.stream()
+                .map(CompanionEntity::getUUID)
+                .collect(java.util.stream.Collectors.toSet());
+        CompanionTokenStore.Issued issued = TlmmFabric.tokenStore()
+                .issue(ids, TokenScope.FULL, Duration.ofDays(days));
+        source.sendSuccess(() -> Component.literal(
+                "MCP token (shown once): " + issued.plaintext()), false);
+        source.sendSuccess(() -> Component.literal(
+                "token_id=" + issued.record().id()), false);
+        return 1;
+    }
+
+    private static int listTokens(net.minecraft.commands.CommandSourceStack source) {
+        List<CompanionTokenStore.Record> tokens = TlmmFabric.tokenStore().list();
+        if (tokens.isEmpty()) {
+            source.sendSuccess(() -> Component.literal("no active MCP tokens"), false);
+            return 0;
+        }
+        for (CompanionTokenStore.Record record : tokens) {
+            source.sendSuccess(() -> Component.literal(
+                    record.id() + "  " + record.digestId() + "  expires="
+                            + record.expiresAt() + "  companions=" + record.companionIds()),
+                    false);
+        }
+        return tokens.size();
+    }
+
+    private static int revokeToken(net.minecraft.commands.CommandSourceStack source, String id) {
+        if (!TlmmFabric.tokenStore().revoke(id)) {
+            source.sendFailure(Component.literal("unknown token id"));
+            return 0;
+        }
+        source.sendSuccess(() -> Component.literal("MCP token revoked"), false);
+        return 1;
     }
 
     private static List<CompanionEntity> ownedCompanions(net.minecraft.commands.CommandSourceStack source) {

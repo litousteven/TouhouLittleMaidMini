@@ -80,7 +80,27 @@ public final class CompanionTools {
         ToolResult say(UUID companionId, String text);
     }
 
+    private static final ThreadLocal<java.util.Set<UUID>> ALLOWED_COMPANIONS =
+            ThreadLocal.withInitial(java.util.Set::of);
+
     private CompanionTools() {
+    }
+
+    /** Runs one tool call with the token's companion scope, restoring the previous one. */
+    public static <T> T withAllowedCompanions(java.util.Set<UUID> companionIds,
+            java.util.function.Supplier<T> action) {
+        java.util.Set<UUID> previous = ALLOWED_COMPANIONS.get();
+        ALLOWED_COMPANIONS.set(java.util.Set.copyOf(companionIds));
+        try {
+            return action.get();
+        } finally {
+            ALLOWED_COMPANIONS.set(previous);
+        }
+    }
+
+    private static boolean allowsCompanion(UUID companionId) {
+        java.util.Set<UUID> allowed = ALLOWED_COMPANIONS.get();
+        return allowed.isEmpty() || allowed.contains(companionId);
     }
 
     public static ToolRegistry registry(CompanionBackend backend) {
@@ -94,7 +114,9 @@ public final class CompanionTools {
                         Map.of(),
                         true, false, true),
                 arguments -> {
-                    var companions = backend.listCompanions();
+                    var companions = backend.listCompanions().stream()
+                            .filter(snapshot -> allowsCompanion(snapshot.companionId()))
+                            .toList();
                     if (companions.isEmpty()) {
                         return ToolResult.ok("no_companions", "[]");
                     }
@@ -119,6 +141,10 @@ public final class CompanionTools {
                     Optional<UUID> id = companionId(arguments);
                     if (id.isEmpty()) {
                         return ToolResult.rejected("invalid_params", "companion_id must be a UUID");
+                    }
+                    if (!allowsCompanion(id.get())) {
+                        return ToolResult.rejected("scope_denied",
+                                "This token may not control this companion");
                     }
                     Optional<CompanionSnapshot> snapshot = backend.findState(id.get());
                     if (snapshot.isEmpty()) {
@@ -151,6 +177,10 @@ public final class CompanionTools {
                     Optional<UUID> id = companionId(arguments);
                     if (id.isEmpty()) {
                         return ToolResult.rejected("invalid_params", "companion_id must be a UUID");
+                    }
+                    if (!allowsCompanion(id.get())) {
+                        return ToolResult.rejected("scope_denied",
+                                "This token may not control this companion");
                     }
                     MoveTargetKind targetKind;
                     MoveMode mode;
@@ -205,6 +235,10 @@ public final class CompanionTools {
                     Optional<UUID> id = companionId(arguments);
                     if (id.isEmpty()) {
                         return ToolResult.rejected("invalid_params", "companion_id must be a UUID");
+                    }
+                    if (!allowsCompanion(id.get())) {
+                        return ToolResult.rejected("scope_denied",
+                                "This token may not control this companion");
                     }
                     InteractTargetKind targetKind;
                     InteractButton button;
@@ -264,6 +298,10 @@ public final class CompanionTools {
                     if (id.isEmpty()) {
                         return ToolResult.rejected("invalid_params", "companion_id must be a UUID");
                     }
+                    if (!allowsCompanion(id.get())) {
+                        return ToolResult.rejected("scope_denied",
+                                "This token may not control this companion");
+                    }
                     ContextCategory category;
                     try {
                         category = ContextCategory.fromId(
@@ -308,6 +346,10 @@ public final class CompanionTools {
                     Optional<UUID> id = companionId(arguments);
                     if (id.isEmpty()) {
                         return ToolResult.rejected("invalid_params", "companion_id must be a UUID");
+                    }
+                    if (!allowsCompanion(id.get())) {
+                        return ToolResult.rejected("scope_denied",
+                                "This token may not control this companion");
                     }
                     InventoryAction action;
                     InventoryTarget source;
@@ -362,6 +404,10 @@ public final class CompanionTools {
                     if (id.isEmpty()) {
                         return ToolResult.rejected("invalid_params", "companion_id must be a UUID");
                     }
+                    if (!allowsCompanion(id.get())) {
+                        return ToolResult.rejected("scope_denied",
+                                "This token may not control this companion");
+                    }
                     try {
                         LocalBehavior behavior = LocalBehavior.fromId(String.valueOf(
                                 arguments.get("behavior")));
@@ -390,6 +436,10 @@ public final class CompanionTools {
                     if (id.isEmpty()) {
                         return ToolResult.rejected("invalid_params", "companion_id must be a UUID");
                     }
+                    if (!allowsCompanion(id.get())) {
+                        return ToolResult.rejected("scope_denied",
+                                "This token may not control this companion");
+                    }
                     int timeoutSeconds = arguments.containsKey("timeout_seconds")
                             ? intValue(arguments, "timeout_seconds") : 0;
                     int maxEvents = arguments.containsKey("max_events")
@@ -410,6 +460,10 @@ public final class CompanionTools {
                     Optional<UUID> id = companionId(arguments);
                     if (id.isEmpty()) {
                         return ToolResult.rejected("invalid_params", "companion_id must be a UUID");
+                    }
+                    if (!allowsCompanion(id.get())) {
+                        return ToolResult.rejected("scope_denied",
+                                "This token may not control this companion");
                     }
                     Object raw = arguments.get("text");
                     String text = raw instanceof String value ? value : "";
@@ -433,6 +487,10 @@ public final class CompanionTools {
                     Optional<UUID> id = companionId(arguments);
                     if (id.isEmpty()) {
                         return ToolResult.rejected("invalid_params", "companion_id must be a UUID");
+                    }
+                    if (!allowsCompanion(id.get())) {
+                        return ToolResult.rejected("scope_denied",
+                                "This token may not control this companion");
                     }
                     return backend.stop(id.get());
                 });

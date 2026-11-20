@@ -217,6 +217,56 @@ class McpServerTest {
     }
 
     @Test
+    void issuedCompanionTokenIsScopedToItsCompanion() throws Exception {
+        CompanionTokenStore store = new CompanionTokenStore();
+        CompanionTokenStore.Issued issued = store.issueFull(COMPANION,
+                java.time.Duration.ofDays(1));
+        server = new McpServer(
+                new McpServerConfig(McpServerConfig.LOOPBACK, 0, TOKEN),
+                CompanionTools.registry(new StubBackend()),
+                store,
+                event -> { });
+        server.start();
+
+        JsonObject allowed = callWithToken(endpoint(), issued.plaintext(),
+                request(30, "tools/list", new JsonObject()));
+        assertTrue(allowed.has("result"));
+
+        JsonObject listed = callWithToken(endpoint(), issued.plaintext(),
+                toolCall(31, "companion_list", new JsonObject()));
+        assertTrue(listed.getAsJsonObject("result").getAsJsonArray("content")
+                .get(0).getAsJsonObject().get("text").getAsString().contains("Alice"));
+
+        UUID other = UUID.fromString("99999999-9999-9999-9999-999999999999");
+        JsonObject arguments = new JsonObject();
+        arguments.addProperty("companion_id", other.toString());
+        JsonObject denied = callWithToken(endpoint(), issued.plaintext(),
+                toolCall(32, "companion_state", arguments));
+        assertTrue(denied.getAsJsonObject("result").getAsJsonArray("content")
+                .get(0).getAsJsonObject().get("text").getAsString().contains("scope_denied"));
+    }
+
+    private JsonObject toolCall(int id, String name, JsonObject arguments) {
+        JsonObject params = new JsonObject();
+        params.addProperty("name", name);
+        params.add("arguments", arguments);
+        return request(id, "tools/call", params);
+    }
+
+    private JsonObject callWithToken(URI endpoint, String token, JsonObject body)
+            throws Exception {
+        HttpRequest request = HttpRequest.newBuilder(endpoint)
+                .header("Authorization", "Bearer " + token)
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString(body.toString(),
+                        StandardCharsets.UTF_8))
+                .build();
+        HttpResponse<String> response = http.send(request, HttpResponse.BodyHandlers.ofString());
+        assertEquals(200, response.statusCode(), response.body());
+        return JsonParser.parseString(response.body()).getAsJsonObject();
+    }
+
+    @Test
     void closeReleasesTheListeningPort() throws Exception {
         server = start();
         int port = server.port();

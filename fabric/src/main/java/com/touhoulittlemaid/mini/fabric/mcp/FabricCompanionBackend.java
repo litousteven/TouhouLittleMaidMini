@@ -786,6 +786,22 @@ public final class FabricCompanionBackend implements CompanionTools.CompanionBac
     }
 
     private static ToolResult dropItem(CompanionEntity companion, InventoryRequest request) {
+        String fingerprint = "inventory.drop:"
+                + (request.hasItem() ? request.item() : "slot:" + request.slot());
+        com.touhoulittlemaid.mini.mcp.PermissionBroker.Ticket permission =
+                com.touhoulittlemaid.mini.fabric.permission.CompanionPermissions
+                        .authorize(companion, fingerprint);
+        if (permission.decision()
+                == com.touhoulittlemaid.mini.mcp.PermissionBroker.Decision.PENDING) {
+            return ToolResult.rejected("permission_required",
+                    "Owner authorization required; permission_id=" + permission.id());
+        }
+        if (permission.decision()
+                != com.touhoulittlemaid.mini.mcp.PermissionBroker.Decision.ALLOWED) {
+            return ToolResult.rejected("permission_denied",
+                    "Owner denied or the authorization expired");
+        }
+
         SourceRef source = findSource(companion, request);
         if (source == null) {
             return ToolResult.rejected("missing_item",
