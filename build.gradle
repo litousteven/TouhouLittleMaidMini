@@ -1,0 +1,50 @@
+plugins {
+    id 'net.fabricmc.fabric-loom' version '1.14.10' apply false
+    id 'net.neoforged.moddev' version '2.0.148' apply false
+}
+
+allprojects {
+    group = rootProject.group
+    version = rootProject.version
+}
+
+subprojects {
+    repositories {
+        maven {
+            name = 'NeoForged CDN'
+            url = 'https://neoforged.forgecdn.net/releases'
+        }
+        mavenCentral()
+    }
+
+    tasks.withType(JavaCompile).configureEach {
+        options.encoding = 'UTF-8'
+        options.compilerArgs.add('-parameters')
+    }
+
+    tasks.withType(Test).configureEach {
+        useJUnitPlatform()
+        testLogging {
+            events 'failed'
+            exceptionFormat 'full'
+        }
+    }
+}
+
+tasks.register('runClient') {
+    group = 'application'
+    description = 'Runs the Fabric development client.'
+    dependsOn ':fabric:runClient'
+}
+
+tasks.register('runServer') {
+    group = 'application'
+    description = 'Runs the Fabric development dedicated server.'
+    dependsOn ':fabric:runServer'
+}
+
+tasks.register('runGameTestServer') {
+    group = 'verification'
+    description = 'Runs the Fabric GameTest server.'
+    dependsOn ':fabric:runGameTestServer'
+}

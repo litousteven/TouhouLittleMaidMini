@@ -2,8 +2,9 @@
 
 ## 当前阶段
 
-当前只完成技术设计，尚未创建 Gradle 工程或游戏代码。开始实现后，先完成
-`docs/02-development-plan.md` 的 M0 Fabric 技术验证，再进入实体与 MCP 功能开发。
+当前处于 Fabric M0 技术验证：Gradle 多模块骨架、最小 MCP 端点、测试实体和
+GameTest 已建立。完成真实客户端渲染、全新构建和 `docs/02-development-plan.md`
+的 M0 验收后，才能创建 M0 完成提交并进入 M1。
 
 ## 不可改变的边界
 

@@ -1,0 +1,90 @@
+plugins {
+    id 'net.neoforged.moddev'
+}
+
+base {
+    archivesName = "touhou-little-maid-mini-${minecraft_version}"
+}
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(java_version as int)
+    }
+}
+
+dependencies {
+    implementation project(':core')
+    implementation project(':mcp')
+}
+
+sourceSets {
+    client {
+        java.srcDir rootProject.file('client/src/main/java')
+        resources.srcDir rootProject.file('client/src/main/resources')
+        compileClasspath += sourceSets.main.output + sourceSets.main.compileClasspath
+        runtimeClasspath += output + compileClasspath + sourceSets.main.runtimeClasspath
+    }
+}
+
+configurations {
+    clientImplementation.extendsFrom implementation
+    clientCompileOnly.extendsFrom compileOnly
+    clientRuntimeOnly.extendsFrom runtimeOnly
+}
+
+neoForge {
+    version = neoforge_version
+    addModdingDependenciesTo(sourceSets.client)
+
+    runs {
+        client {
+            client()
+            gameDirectory = project.mkdir(project.file('run/client'))
+            systemProperty 'tlmm.mcp.enabled', 'true'
+        }
+        server {
+            server()
+            gameDirectory = project.mkdir(project.file('run/server'))
+            systemProperty 'tlmm.mcp.enabled', 'true'
+        }
+        gameTestServer {
+            type = 'gameTestServer'
+            gameDirectory = project.mkdir(project.file('run/gameTestServer'))
+            systemProperty 'neoforge.enabledGameTestNamespaces', mod_id
+        }
+    }
+
+    mods {
+        "${mod_id}" {
+            sourceSet sourceSets.main
+            sourceSet sourceSets.client
+        }
+    }
+}
+
+tasks.matching {
+    it.name in ['runClient', 'runServer', 'runGameTestServer']
+}.configureEach {
+    // Fabric is the primary loader. Re-enable these with -Ptlmm.enableNeoForgeRuns=true
+    // when the post-M4 compatibility adapter is actively being exercised.
+    enabled = providers.gradleProperty('tlmm.enableNeoForgeRuns').isPresent()
+}
+
+processResources {
+    def expandProps = [
+            version                      : version,
+            mod_id                       : mod_id,
+            mod_name                     : mod_name,
+            mod_author                   : mod_author,
+            license                      : license,
+            minecraft_version            : minecraft_version,
+            neoforge_minecraft_version_range: neoforge_minecraft_version_range,
+            neoforge_version             : neoforge_version,
+            neoforge_loader_version_range: neoforge_loader_version_range,
+            java_version                 : java_version
+    ]
+    inputs.properties(expandProps)
+    filesMatching('META-INF/neoforge.mods.toml') {
+        expand(expandProps)
+    }
+}

@@ -1,0 +1,86 @@
+plugins {
+    id 'net.fabricmc.fabric-loom'
+}
+
+base {
+    archivesName = "touhou-little-maid-mini-fabric-${minecraft_version}"
+}
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(java_version as int)
+    }
+}
+
+repositories {
+    maven {
+        name = 'Fabric'
+        url = 'https://maven.fabricmc.net'
+    }
+}
+
+dependencies {
+    minecraft "com.mojang:minecraft:${minecraft_version}"
+    implementation "net.fabricmc:fabric-loader:${fabric_loader_version}"
+    implementation "net.fabricmc.fabric-api:fabric-api:${fabric_version}"
+    implementation project(':core')
+    implementation project(':mcp')
+    compileOnly fabricApi.module('fabric-gametest-api-v1', fabric_version)
+    localRuntime fabricApi.module('fabric-gametest-api-v1', fabric_version)
+}
+
+sourceSets {
+    main {
+        java.srcDir rootProject.file('client/src/main/java')
+        resources.srcDir rootProject.file('client/src/main/resources')
+    }
+}
+
+loom {
+    runs {
+        client {
+            client()
+            setConfigName('Fabric Client')
+            ideConfigGenerated(true)
+            runDir('../run/client')
+            vmArg('-Dtlmm.mcp.enabled=true')
+            def quickPlay = providers.gradleProperty('tlmm.quickPlay')
+            if (quickPlay.present) {
+                programArgs '--username', 'Dev', '--quickPlayMultiplayer', quickPlay.get()
+            }
+        }
+        server {
+            server()
+            setConfigName('Fabric Server')
+            ideConfigGenerated(true)
+            runDir('../run/server')
+            vmArg('-Dtlmm.mcp.enabled=true')
+        }
+        gameTestServer {
+            inherit server
+            setConfigName('Fabric GameTest Server')
+            ideConfigGenerated(false)
+            runDir('../run/gameTestServer')
+            vmArg('-Dfabric-api.gametest')
+        }
+    }
+}
+
+processResources {
+    def expandProps = [
+            version                      : version,
+            mod_id                       : mod_id,
+            mod_name                     : mod_name,
+            mod_author                   : mod_author,
+            license                      : license,
+            minecraft_version            : minecraft_version,
+            fabric_minecraft_version_range: fabric_minecraft_version_range,
+            fabric_version               : fabric_version,
+            fabric_loader_version        : fabric_loader_version,
+            java_version                 : java_version
+    ]
+    inputs.properties(expandProps)
+    filesMatching('fabric.mod.json') {
+        expand(expandProps)
+    }
+}
