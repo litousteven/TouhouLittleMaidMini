@@ -59,10 +59,12 @@ public final class FabricCompanionBackend implements CompanionTools.CompanionBac
     }
 
     /**
-     * Block interaction is gated on a {@code Player} in Minecraft 26.3: both
-     * {@code useItemOn} and {@code useWithoutItem} take a Player, and a companion is not
-     * one. Rather than emulate a Player or silently mutate owner state, this reports the
-     * platform limitation so the agent can choose another approach.
+     * Right-clicks a block as the companion.
+     *
+     * <p>{@code useItemOn} / {@code useWithoutItem} require a Player, but vanilla already
+     * gives non-player mobs a supported path: {@code ServerLevel.destroyBlock(pos, true,
+     * entity)} harvests a fully grown crop and drops the yield, exactly as
+     * {@code HarvestFarmland} does for villagers. That is the interaction this exposes.
      */
     @Override
     public ToolResult interact(UUID companionId, int x, int y, int z) {
@@ -72,12 +74,26 @@ public final class FabricCompanionBackend implements CompanionTools.CompanionBac
             if (!level.isLoaded(pos)) {
                 return ToolResult.rejected("not_loaded", "block is not loaded");
             }
-            String blockId = level.getBlockState(pos).getBlock()
-                    .builtInRegistryHolder().key().identifier().toString();
+
+            var state = level.getBlockState(pos);
+            String blockId = state.getBlock().builtInRegistryHolder().key().identifier().toString();
+
+            if (state.getBlock() instanceof net.minecraft.world.level.block.CropBlock crop) {
+                if (!crop.isMaxAge(state)) {
+                    return ToolResult.rejected("not_ready", "crop is not fully grown: " + blockId);
+                }
+                boolean harvested = level.destroyBlock(pos, true, companion);
+                if (!harvested) {
+                    return ToolResult.rejected("internal_error", "harvest failed: " + blockId);
+                }
+                events.publish(companionId.toString(), "operation_completed",
+                        "{\"action\":\"harvest\",\"block\":\"" + blockId + "\"}");
+                return ToolResult.ok("harvested", "harvested " + blockId);
+            }
+
             return ToolResult.rejected("unsupported_interaction",
-                    "Minecraft 26.3 block interaction requires a Player context; "
-                            + "companion body interaction is scheduled for M3 (block="
-                            + blockId + ")");
+                    "No supported block interaction for " + blockId
+                            + "; only fully grown crops are handled in M2");
         }));
     }
 

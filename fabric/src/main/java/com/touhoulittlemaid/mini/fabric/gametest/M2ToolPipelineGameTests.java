@@ -156,24 +156,69 @@ public final class M2ToolPipelineGameTests {
     }
 
     @GameTest(maxTicks = 100)
-    public void interactionReportsThePlatformLimitInsteadOfPretending(GameTestHelper helper) {
+    public void companionHarvestsAFullyGrownCrop(GameTestHelper helper) {
         CompanionEntity companion = helper.spawn(FabricContent.COMPANION, 2, 2, 2);
         ToolRegistry registry = registryFor(helper);
-        var pos = helper.absolutePos(new net.minecraft.core.BlockPos(1, 2, 1));
+
+        var soil = helper.absolutePos(new net.minecraft.core.BlockPos(2, 1, 3));
+        var cropPos = soil.above();
+        var level = helper.getLevel();
+        level.setBlockAndUpdate(soil, net.minecraft.world.level.block.Blocks.FARMLAND
+                .defaultBlockState());
+        var wheat = net.minecraft.world.level.block.Blocks.WHEAT.defaultBlockState()
+                .setValue(net.minecraft.world.level.block.CropBlock.AGE, 7);
+        level.setBlockAndUpdate(cropPos, wheat);
+
+        if (!(level.getBlockState(cropPos).getBlock()
+                instanceof net.minecraft.world.level.block.CropBlock crop)
+                || !crop.isMaxAge(level.getBlockState(cropPos))) {
+            throw helper.assertionException("test setup did not create a mature crop");
+        }
 
         ToolResult result = registry.invoke("companion_interact", Map.of(
                 "companion_id", companion.getUUID().toString(),
-                "x", pos.getX(),
-                "y", pos.getY(),
-                "z", pos.getZ()));
+                "x", cropPos.getX(),
+                "y", cropPos.getY(),
+                "z", cropPos.getZ()));
 
-        if (result.status() != ToolResult.Status.REJECTED) {
-            throw helper.assertionException(
-                    "interact must report the platform limit rather than succeed: "
-                            + text(result));
+        if (result.status() != ToolResult.Status.OK) {
+            throw helper.assertionException("harvest failed: " + text(result));
         }
-        if (!result.code().equals("unsupported_interaction")) {
-            throw helper.assertionException("unexpected code: " + text(result));
+        if (!result.message().contains("wheat")) {
+            throw helper.assertionException("harvest did not report the crop: " + result.message());
+        }
+        if (!level.getBlockState(cropPos).isAir()) {
+            throw helper.assertionException("harvested crop should be removed from the field");
+        }
+        helper.succeed();
+    }
+
+    @GameTest(maxTicks = 100)
+    public void immatureCropIsRefusedWithNotReady(GameTestHelper helper) {
+        CompanionEntity companion = helper.spawn(FabricContent.COMPANION, 2, 2, 2);
+        ToolRegistry registry = registryFor(helper);
+
+        var soil = helper.absolutePos(new net.minecraft.core.BlockPos(2, 1, 3));
+        var cropPos = soil.above();
+        var level = helper.getLevel();
+        level.setBlockAndUpdate(soil, net.minecraft.world.level.block.Blocks.FARMLAND
+                .defaultBlockState());
+        level.setBlockAndUpdate(cropPos,
+                net.minecraft.world.level.block.Blocks.WHEAT.defaultBlockState());
+
+        ToolResult result = registry.invoke("companion_interact", Map.of(
+                "companion_id", companion.getUUID().toString(),
+                "x", cropPos.getX(),
+                "y", cropPos.getY(),
+                "z", cropPos.getZ()));
+
+        if (result.status() != ToolResult.Status.REJECTED
+                || !result.code().equals("not_ready")) {
+            throw helper.assertionException("immature crop must be refused with not_ready: "
+                    + text(result));
+        }
+        if (level.getBlockState(cropPos).isAir()) {
+            throw helper.assertionException("immature crop must not be destroyed");
         }
         helper.succeed();
     }

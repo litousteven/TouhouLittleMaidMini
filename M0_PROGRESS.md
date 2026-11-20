@@ -213,20 +213,23 @@ $env:PATH="$env:JAVA_HOME\bin;$env:PATH"
 - 请求幂等：相同 `request_id` 重放不二次执行。
 - `docs/mcp-development-setup.md`：Token 生成、启动、连接与冒烟步骤。
 
-尚未完成（M2 收尾）：
+尚未完成（M2 收尾，进入 M3）：
 
-- **`companion_interact` 被平台阻塞**：Minecraft `26.3` 的 `useItemOn` /
-  `useWithoutItem` 只接受 `Player`，同伴实体无法右键方块。当前明确返回
-  `unsupported_interaction`，不伪造成功。详见 `docs/validation/M2.md` 第 4 节。
 - `companion_context` 目前只按半径统计方块，尚未支持标签与实体过滤。
 - `companion_inventory` 只读单槽，尚未支持 `action` 与装备槽。
 - 事件长轮询是即时返回，尚未真正挂起等待 `timeout_seconds`。
+- `companion_interact` 目前只处理成熟 `CropBlock` 收获；其他方块交互返回
+  `unsupported_interaction`。
 - Token 按同伴授权、撤销与过期属于 M3。
 - 客户端 MCP 连接状态显示。
 
-M2 结论：协议、认证、作用域、审计、幂等、事件与线程桥接为 **Go**；
-`companion_interact` 写交互为 **No-Go**，因此 M2 未标记完成。
-验收记录见 `docs/validation/M2.md`。
+M2 结论：**Go**。协议、认证、作用域、审计、幂等、事件、线程桥接与作物收获全部
+实测通过。验收记录见 `docs/validation/M2.md`。
+
+关于 `companion_interact`：早期曾误判为"Minecraft 26.3 需要 Player 上下文而无法
+实现"。正确依据是原版 `HarvestFarmland` 使用
+`ServerLevel.destroyBlock(pos, dropItems, entity)`，该入口接受任意 `Entity`，
+同伴实体同样适用。已按此实现并由 GameTest 覆盖。
 
 ## 恢复工作
 
