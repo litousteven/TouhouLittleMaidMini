@@ -26,7 +26,8 @@
       "com.touhoulittlemaid.mini.fabric.gametest.M5BaselineGameTests",
       "com.touhoulittlemaid.mini.fabric.gametest.M6PlanGameTests",
       "com.touhoulittlemaid.mini.fabric.gametest.M6BodyGameTests",
-      "com.touhoulittlemaid.mini.fabric.gametest.M6ModulesGameTests"
+      "com.touhoulittlemaid.mini.fabric.gametest.M6ModulesGameTests",
+      "com.touhoulittlemaid.mini.fabric.gametest.M6SemanticGameTests"
     ],
     "fabric-client-gametest": [
       "com.touhoulittlemaid.mini.fabric.gametest.CompanionClientGameTests"

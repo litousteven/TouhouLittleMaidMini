@@ -9,7 +9,10 @@ import com.touhoulittlemaid.mini.core.plan.ModuleResult;
 import com.touhoulittlemaid.mini.core.plan.ModuleSpec;
 import com.touhoulittlemaid.mini.core.plan.ParamSpec;
 import com.touhoulittlemaid.mini.core.plan.RiskClass;
+import com.touhoulittlemaid.mini.core.semantic.SemanticTag;
 import com.touhoulittlemaid.mini.fabric.entity.CompanionEntity;
+import com.touhoulittlemaid.mini.fabric.semantic.CropShape;
+import com.touhoulittlemaid.mini.fabric.semantic.SemanticService;
 
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -74,6 +77,12 @@ final class FarmAreaModules {
             FabricModuleContext fabric = require(context);
             List<BlockPos> crops = findMature(fabric, params);
             if (crops.isEmpty()) {
+                String unknown = firstUnknownCrop(fabric, params);
+                if (unknown != null) {
+                    return ModuleResult.failed(FailureCodes.UNKNOWN_CATEGORY,
+                            unknown + " has an age property but no known category; "
+                                    + "add it to the knowledge layer");
+                }
                 return ModuleResult.failed(FailureCodes.NOT_HARVESTABLE,
                         "no mature crop within " + params.integer("radius", 8) + " blocks");
             }
@@ -95,7 +104,8 @@ final class FarmAreaModules {
                     BlockPos pos = queue.pollFirst();
                     if (pos != null) {
                         BlockState state = fabric.level().getBlockState(pos);
-                        if (state.getBlock() instanceof CropBlock crop && crop.isMaxAge(state)) {
+                        if (SemanticService.resolve(state).has(SemanticTag.CROP)
+                                && CropShape.isMature(state)) {
                             if (fabric.level().destroyBlock(pos, true, companion)) {
                                 harvested++;
                                 if (replant && plantSeed(companion, pos)) {
@@ -289,6 +299,24 @@ final class FarmAreaModules {
         return fabric;
     }
 
+    /** Returns the first age-bearing block the resolver cannot classify, if any. */
+    private static String firstUnknownCrop(FabricModuleContext fabric, ModuleParams params) {
+        int radius = params.integer("radius", 8);
+        BlockPos center = fabric.companion().blockPosition();
+        for (BlockPos pos : BlockPos.betweenClosed(center.offset(-radius, -2, -radius),
+                center.offset(radius, 2, radius))) {
+            if (!fabric.level().isLoaded(pos)) {
+                continue;
+            }
+            BlockState state = fabric.level().getBlockState(pos);
+            if (CropShape.looksLikeCrop(state)
+                    && !SemanticService.resolve(state).has(SemanticTag.CROP)) {
+                return SemanticService.resolve(state).id();
+            }
+        }
+        return null;
+    }
+
     private static List<BlockPos> findMature(FabricModuleContext fabric, ModuleParams params) {
         int radius = params.integer("radius", 8);
         int max = params.integer("max", 16);
@@ -300,7 +328,9 @@ final class FarmAreaModules {
                 continue;
             }
             BlockState state = fabric.level().getBlockState(pos);
-            if (state.getBlock() instanceof CropBlock crop && crop.isMaxAge(state)) {
+            if (CropShape.looksLikeCrop(state)
+                    && SemanticService.resolve(state).has(SemanticTag.CROP)
+                    && CropShape.isMature(state)) {
                 found.add(pos.immutable());
             }
         }
@@ -361,7 +391,8 @@ final class FarmAreaModules {
         for (int slot = 0; slot < companion.backpack().getContainerSize(); slot++) {
             ItemStack stack = companion.backpack().getItem(slot);
             if (stack.isEmpty() || !(stack.getItem() instanceof BlockItem blockItem)
-                    || !(blockItem.getBlock() instanceof CropBlock)) {
+                    || !SemanticService.resolve(blockItem.getBlock().defaultBlockState())
+                            .has(SemanticTag.CROP)) {
                 continue;
             }
             if (ItemMatch.matches(stack, seed.startsWith("#"),
@@ -381,7 +412,8 @@ final class FarmAreaModules {
         for (int slot = 0; slot < companion.backpack().getContainerSize(); slot++) {
             ItemStack stack = companion.backpack().getItem(slot);
             if (stack.isEmpty() || !(stack.getItem() instanceof BlockItem blockItem)
-                    || !(blockItem.getBlock() instanceof CropBlock)) {
+                    || !SemanticService.resolve(blockItem.getBlock().defaultBlockState())
+                            .has(SemanticTag.CROP)) {
                 continue;
             }
             BlockState place = blockItem.getBlock().defaultBlockState();

@@ -14,8 +14,8 @@
 | Fabric Loader / API | `0.20.1` / `0.165.2+26.3` |
 | Java | `25`（构建与运行同一 toolchain） |
 | 已发布 | tag `v0.1.0-beta`（被动 MCP） |
-| 工作区 | M6.0–M6.2 已实现并验证，未打新 tag；M6.3 起未开始 |
-| 验证基线 | `:core:test :mcp:test :llm:test` 通过；`verifyTranslations` 78 键一致；77 个 GameTest 通过 |
+| 工作区 | M6.0–M6.3 已实现并验证，未打新 tag；M6.3b 起未开始 |
+| 验证基线 | `:core:test :mcp:test :llm:test` 通过（183 个用例）；`verifyTranslations` 78 键一致；82 个 GameTest 通过 |
 
 `0.1.0-beta` 与本工作区的差别只有一处：M5 增加了确定性基础脑、游戏内模型配置和主动
 请求，但模型仍只能切换行为枚举，不能编排多步动作。
@@ -35,7 +35,7 @@
 | `M6.0` | 模块框架 | 通过。`Plan` 静态校验、逐 tick 执行、事件流、`/tlmm debug plan` | `docs/validation/M6.0.md` |
 | `M6.1` | 身体能力 | 通过。挖掘/放置/容器/槽位搬运/合成/熔炼 + 工具前置 | `docs/validation/M6.1.md` |
 | `M6.2` | 模块库 | 通过。区域农作、按标签采集、砍树、箱子整理 | `docs/validation/M6.2.md` |
-| `M6.3` | 语义底座 | 未开始 | — |
+| `M6.3` | 语义底座 | 通过。六档优先级、启发式、知识文件与冲突校验 | `docs/validation/M6.3.md` |
 | `M6.3b` | 标注闭环 | 未开始 | — |
 | `M6.4` | 客户端脑 | 未开始 | — |
 | `M6.5` | 自主模式 | 未开始 | — |

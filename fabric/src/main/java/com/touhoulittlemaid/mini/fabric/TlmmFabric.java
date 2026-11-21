@@ -59,6 +59,9 @@ public final class TlmmFabric implements ModInitializer {
             LOGGER.info("[m0] saved-data baseline value={}", saveVersion);
             CompanionConfigs.load();
             com.touhoulittlemaid.mini.fabric.config.LlmConfigs.load();
+            com.touhoulittlemaid.mini.fabric.semantic.SemanticService.load(
+                    com.touhoulittlemaid.mini.fabric.semantic.SemanticService
+                            .knowledgeDirectory(FabricLoader.getInstance().getGameDir()));
             com.touhoulittlemaid.mini.fabric.runtime.LlmRuntime.install(server);
             TOKEN_STORE.restore(TokenSavedData.get(server).toPersisted());
             EventBus events = new EventBus();
@@ -91,6 +94,7 @@ public final class TlmmFabric implements ModInitializer {
             }
             CompanionConfigs.reset();
             com.touhoulittlemaid.mini.fabric.config.LlmConfigs.reset();
+            com.touhoulittlemaid.mini.fabric.semantic.SemanticService.reset();
             com.touhoulittlemaid.mini.fabric.runtime.LlmRuntime.reset();
             ServerDiagnostics.reset();
             state.set(PlatformState.starting(MOD_VERSION, MINECRAFT_VERSION));

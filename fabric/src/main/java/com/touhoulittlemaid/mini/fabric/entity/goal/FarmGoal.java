@@ -1,24 +1,33 @@
 package com.touhoulittlemaid.mini.fabric.entity.goal;
 
 import com.touhoulittlemaid.mini.core.LocalBehavior;
+import com.touhoulittlemaid.mini.core.semantic.SemanticResolution;
+import com.touhoulittlemaid.mini.core.semantic.SemanticTag;
 import com.touhoulittlemaid.mini.fabric.entity.CompanionEntity;
 import com.touhoulittlemaid.mini.fabric.runtime.CompanionRuntimeState;
+import com.touhoulittlemaid.mini.fabric.semantic.CropShape;
+import com.touhoulittlemaid.mini.fabric.semantic.SemanticService;
 
 import java.util.EnumSet;
+import java.util.HashSet;
+import java.util.Set;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.entity.ai.goal.Goal;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.level.block.CropBlock;
+import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.FarmlandBlock;
 import net.minecraft.world.level.block.state.BlockState;
 
 /**
- * Deterministic baseline farming without a model or external agent.
+ * Deterministic baseline farming, driven by the semantic resolver instead of a hard-coded
+ * crop class.
  *
- * <p>Only vanilla {@link CropBlock} semantics are hard coded. One new compatible crop
- * needs no new Task; other modded crops are handled by data/Skill or a model request.
+ * <p>Anything with an {@code age} property is a candidate. If the resolver cannot classify
+ * it, the companion does not guess and does not silently skip: it publishes
+ * {@code unknown_category} once per block id so the player (or a later model pass) can add
+ * the missing knowledge.
  */
 public final class FarmGoal extends Goal {
 
@@ -28,6 +37,7 @@ public final class FarmGoal extends Goal {
     };
 
     private final CompanionEntity companion;
+    private final Set<String> reportedUnknown = new HashSet<>();
     private BlockPos target;
 
     public FarmGoal(CompanionEntity companion) {
@@ -74,10 +84,11 @@ public final class FarmGoal extends Goal {
         }
         companion.getNavigation().stop();
         BlockState state = companion.level().getBlockState(target);
-        if (!(state.getBlock() instanceof CropBlock crop)) {
+        if (!SemanticService.resolve(state).has(SemanticTag.CROP)) {
             target = null;
             return;
         }
+        Block crop = state.getBlock();
         if (companion.level().destroyBlock(target, true, companion)) {
             CompanionRuntimeState.publish(companion.getUUID(), "harvest_completed",
                     "{\"source\":\"local_farm\"}");
@@ -95,13 +106,25 @@ public final class FarmGoal extends Goal {
             for (int dz = -radius; dz <= radius; dz++) {
                 for (int dy = -2; dy <= 2; dy++) {
                     BlockPos pos = origin.offset(dx, dy, dz);
-                    if (!companion.level().isLoaded(pos) || !isMature(pos)) {
+                    if (!companion.level().isLoaded(pos)) {
+                        continue;
+                    }
+                    BlockState state = companion.level().getBlockState(pos);
+                    if (!CropShape.looksLikeCrop(state)) {
+                        continue;
+                    }
+                    SemanticResolution resolution = SemanticService.resolve(state);
+                    if (!resolution.has(SemanticTag.CROP)) {
+                        reportUnknown(resolution);
+                        continue;
+                    }
+                    if (!CropShape.isMature(state)) {
                         continue;
                     }
                     double distance = companion.distanceToSqr(pos.getX() + 0.5D,
                             pos.getY(), pos.getZ() + 0.5D);
                     if (distance < bestDistance && standPosition(pos) != null) {
-                        best = pos;
+                        best = pos.immutable();
                         bestDistance = distance;
                     }
                 }
@@ -110,9 +133,19 @@ public final class FarmGoal extends Goal {
         return best;
     }
 
+    private void reportUnknown(SemanticResolution resolution) {
+        String id = resolution.id();
+        if (id == null || id.isEmpty() || !reportedUnknown.add(id)) {
+            return;
+        }
+        CompanionRuntimeState.publish(companion.getUUID(), "unknown_category",
+                "{\"block\":\"" + id + "\",\"source\":\"local_farm\"}");
+    }
+
     private boolean isMature(BlockPos pos) {
         BlockState state = companion.level().getBlockState(pos);
-        return state.getBlock() instanceof CropBlock crop && crop.isMaxAge(state);
+        return SemanticService.resolve(state).has(SemanticTag.CROP)
+                && CropShape.isMature(state);
     }
 
     private BlockPos standPosition(BlockPos crop) {
@@ -126,7 +159,7 @@ public final class FarmGoal extends Goal {
         return null;
     }
 
-    private void replant(CropBlock crop, BlockPos pos) {
+    private void replant(Block crop, BlockPos pos) {
         if (!companion.level().getBlockState(pos).isAir()
                 || !(companion.level().getBlockState(pos.below()).getBlock()
                 instanceof FarmlandBlock)) {

@@ -318,7 +318,7 @@ M2 结论：**Go**。协议、认证、作用域、审计、幂等、事件、�
 `.\scripts\soak.ps1 -Minutes 1440 -IntervalSeconds 60` 并保存 CSV；短时验证不能替代该门禁。
 首次客户端启动若出现 `0xC0000005`，删除客户端缓存后重试；本机第二次运行已稳定通过。
 
-## M6 进度：0.2 模块框架与模块库（M6.0–M6.2）
+## M6 进度：0.2 模块框架、模块库与语义底座（M6.0–M6.3）
 
 验收记录：[`docs/validation/M6.0.md`](docs/validation/M6.0.md)、
 [`docs/validation/M6.1.md`](docs/validation/M6.1.md)、
@@ -333,10 +333,14 @@ M2 结论：**Go**。协议、认证、作用域、审计、幂等、事件、�
 - 模块：`say`、`goto`、`dig_block`、`place_block`、`withdraw_items`、`deposit_items`、
   `move_slot`、`craft_item`、`smelt_items`、`harvest_area`、`plant_area`、`till_area`、
   `mine_material`、`chop_tree`、`tidy_chests`，共 15 个。
-- 验证：`:core:test` 通过；`:fabric:runGameTestServer` → `All 77 required tests passed`；
+- 语义底座（M6.3）：`SemanticTag` 17 个值、六档优先级解析器、`RealFacts` 接口、
+  `KnowledgeFile` 原子读写、`KnowledgeValidator` 四类拒绝码与低置信度 pending；
+  `FarmGoal` 与区域农作模块改走 `SemanticService`，未知 `age` 方块发布 `unknown_category`。
+- 验证：`:core:test :mcp:test :llm:test` 共 183 个用例通过；
+  `:fabric:runGameTestServer` → `All 82 required tests passed`（连续三次）；
   `verifyTranslations` 78 键一致。
-- 未开始：`M6.3` 语义底座、`M6.3b` 标注闭环、`M6.4` 客户端脑、`M6.5` 自主模式、
-  `M6.6` 学习闭环、`M6.7` 发布验收。
+- 未开始：`M6.3b` 标注闭环、`M6.4` 客户端脑、`M6.5` 自主模式、`M6.6` 学习闭环、
+  `M6.7` 发布验收。
 
 ## 恢复工作
 
