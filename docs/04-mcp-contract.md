@@ -2,8 +2,9 @@
 
 版本：`tlm-mini-mcp/v1`
 
-本文定义外部 Agent CLI 与模组之间的稳定边界。MCP 只是传输；业务实现必须使用强类型
-Java record，文本 JSON 仅用于跨进程表示。
+本文定义外部 Agent CLI 与模组之间的稳定边界。MCP 只是入站传输；游戏内直连模型复用
+同一套工具和动作语义，但通过进程内 Action Facade 调用，不经过 HTTP。业务实现必须使用
+强类型 Java record，文本 JSON 仅用于跨进程表示。
 
 ## 1. 通用规则
 

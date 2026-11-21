@@ -1,5 +1,8 @@
 # 开发进度
 
+> 本文件是 `M0`–`M4` 的历史流水与工程记录，**不再承载新计划**。
+> `0.2` 的开发计划、测试与验收见 [`docs/02-development-plan.md`](docs/02-development-plan.md)。
+
 更新时间：`2026-11-21`
 
 当前目标：Minecraft `26.3`、Fabric 首发、Java `25`。NeoForge 只保留后续适配，

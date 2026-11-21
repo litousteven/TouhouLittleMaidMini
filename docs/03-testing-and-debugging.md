@@ -398,3 +398,59 @@ Agent 提示词：
 9. 游戏内服务端主线程是否卡住。
 10. 查看审计中的 request ID、工具名、耗时和错误码。
 
+## 10. 0.2 验证入口（随里程碑落地）
+
+> 本节描述 `0.2` 将新增的验证入口，**当前版本尚未实现**。命令形式在实现时可能微调，
+> 层级与断言以 [`02-development-plan.md`](02-development-plan.md) 第 4 章为准。
+
+### 10.1 计划执行
+
+`M6.0` 起提供 OP 命令，用于手工与 GameTest 触发计划，不新增 MCP 工具：
+
+```text
+/tlmm debug plan {"version":1,"steps":[
+  {"module":"say","params":{"text":"test"}},
+  {"module":"goto","params":{"target":"~ ~ ~5"}}]}
+```
+
+成功标准：事件依次出现 `plan_started` → `step_started` → `step_finished` →
+`plan_finished`；非法计划返回具体拒绝码，不执行任何一步。
+
+### 10.2 知识与标注
+
+```text
+/tlmm knowledge scan
+/tlmm knowledge list
+/tlmm knowledge approve <id>
+/tlmm knowledge undo <batch>
+```
+
+准备：安装 Farmer's Delight，或用一个只注册作物与工作站的最小测试模组。断言顺序为
+"扫描出候选 → 提案进 entries/pending → 审阅后 `farm` 可收 → 撤销后回到
+`unknown_category`"。
+
+### 10.3 整理
+
+```text
+/tlmm debug tidy
+```
+
+准备 3 个杂箱，同类物品分散在 4 处。导出前后槽位快照并 diff：同类集中、空出 ≥1 箱、
+保留箱与玩家 5 格内箱子槽位不变、数量守恒。
+
+### 10.4 工具授权
+
+1. 清空同伴背包工具，观察机会清单不含 `gather_building`。
+2. 放入石镐，机会出现；执行中取走镐，下一步返回 `tool_lost`。
+3. 空手被僵尸攻击：断言不还手、出现后撤与播报；放入剑后恢复还击。
+
+### 10.5 客户端脑
+
+用真实 Key 做一次一句话任务，同时：
+
+- 抓包确认服务端无出站模型请求；
+- 检查服务端日志、审计与配置文件无 Key；
+- 断开客户端，确认计划停止且服务端无残留任务。
+
+以上入口每落地一个，就在本文件补齐实际命令与已知偏差，不提前写成"已可用"。
+

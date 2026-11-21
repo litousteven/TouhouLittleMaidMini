@@ -10,6 +10,7 @@ Java `25`。NeoForge `26.3.0.101` 保留为后续适配基线。
 
 | 仓库 | 固定参考点 | 借鉴内容 | 明确不继承 |
 |---|---|---|---|
+| [TouhouLittleMaid](https://github.com/TartaricAcid/TouhouLittleMaid) | `1.20` 分支；调研点：`AIConfig`、`LLMOpenAISite`、`MaidAIChatManager`、`MaidBrain` 与 `entity/ai/brain/task` | 基础脑的任务分层；OpenAI 兼容站点需要的 base URL、secretKey、model 字段；由实体事件主动发起模型请求 | 不 fork；不依赖 TLM 内部类；不复制模型、声音、贴图或 1500+ 类任务体系 |
 | [TouhouLittleMaid-26.1](https://github.com/TouhouLittleMaid/TouhouLittleMaid-26.1) | `master`；在实现前记录实际审阅 commit | 女仆同伴的产品形态、实体/装备/管理界面需要解决的问题，以及跨版本适配的复杂度 | 不 fork；不依赖 TLM 内部类；不复制模型、声音、贴图或任务体系 |
 | [minecraft-numen](https://github.com/Dwinovo/minecraft-numen) | `v0.1.5-26.3-beta`（commit `1abb37e`）；M0 时复核发布状态和实际依赖 | 外部大脑驾驶、纯 JVM MCP/权限边界、事件与长等待、插件/Skill 的扩展思路 | 不引入内置 LLM、Lua/任意脚本、Numen 假玩家身体或其完整模组架构 |
 
@@ -19,18 +20,18 @@ Java `25`。NeoForge `26.3.0.101` 保留为后续适配基线。
 
 ## 1. 结论
 
-项目采用**Fabric 首发的独立轻量同伴模组 + 外部 MCP Agent + Skill/数据驱动的扩展方式**。
+项目采用**Fabric 首发的独立轻量同伴模组 + 确定性本地基础脑 + 双模型脑（外部 MCP Agent 与游戏内可选直连模型）+ Skill/数据驱动的扩展方式**。
 
-它不以“减少 TLM 的代码行数”为终点，而是替换扩展模型：TouhouLittleMaid 倾向于为每种
-工作增加 Task、Behavior、GUI 和专用逻辑；本项目让 Agent 使用少量稳定动作、上下文和
-Skill 组合完成未知任务。只有实时控制、安全、权限、持久化以及无法泛化的游戏交互留在
-Java。
+它不以“减少 TLM 的代码行数”为终点，而是分层：确定性基础能力留在 Java，模型只处理
+未知场景。TouhouLittleMaid 倾向于为每种工作增加 Task、Behavior、GUI 和专用逻辑；本
+项目保留少量可复用基础行为，其余由外部 Agent 或直连模型使用少量稳定动作、上下文和
+Skill 组合完成。只有实时控制、安全、权限、持久化以及无法泛化的游戏交互留在 Java。
 
 选择依据：
 
 - TouhouLittleMaid `26.1` 仓库约有 1,500 个 Java 源文件，包含完整的实体、Brain、
   Task、模型包、GUI、网络、语音和内置 LLM。直接 fork 后再移植到 `26.3` 不符合
-  “精简版”目标。
+  “精简版”目标；我们只借鉴其任务分层和 `AIConfig`/`LLMOpenAISite` 的最小配置面。
 - TLM 当前公开主线仍是 `26.1.2`，没有可依赖的 `26.3` 版本。
 - Numen 已有 `v0.1.5-26.3-beta` 预发行标签，并提供了不认识同伴和游戏的纯 JVM
   MCP 模块；README 的支持版本表与 Release 页面需要在 M0 一并核对，不能直接把
@@ -45,58 +46,75 @@ Java。
 ### 2.1 目标
 
 - 一名可召唤、可保存、可配置管理的同伴实体。
-- 跟随、待命、守卫三类本地行为。
+- 跟随、驻守、守卫和收割四类本地基础行为；无需模型即可工作。
 - 外部 Agent CLI 能查询状态、组合移动/观察/交互/背包动作并接收事件。
-- 农作、钓鱼、整理箱子等流程由外部 Skill + 通用动作完成，不为每种玩法新增 Java Task。
+- 玩家可在自己的客户端配置 OpenAI 兼容的 base URL、model name 与 API Key；模型调用只在客户端发生。
+- 模型通过"动作模块序列 + 参数"的计划扩展未知作物、模组材料、建造步骤与交互顺序；计划经服务端校验后执行。
+- 农作、钓鱼、整理箱子等流程优先由 Skill + 动作模块完成，不为每种玩法新增 Java Task。
 - 遵守原版交互语义的新模组内容优先通过标签、ID、数据和 Skill 适配。
-- Agent 断开后同伴自行进入安全状态。
+- Agent 断开或客户端退出后同伴自行进入安全状态。
 - MCP 端点在专用服默认关闭，默认只监听回环地址。
 - 工具调用、操作状态和错误均可测试、可审计。
 
 ### 2.2 非目标
 
-- 不内置模型 SDK、API Key、上下文压缩或聊天记忆。
-- 不实现 Lua、JavaScript 或其他任意脚本执行。
+- 不内置第三方模型 SDK、STT 或 TTS；直连模型使用最小 Java HTTP 客户端。
+- 不在日志、聊天、审计或仓库中记录 API Key；**Key 只保存在发起请求的客户端**，服务端不保存、不读取、不转发。
+- 不通过模型训练改变权重；“学习”仅指生成可审阅的 Skill/计划模板。
+- 不接受模型提交代码：不实现 Lua、JavaScript、动态加载或其他宿主级执行；模型只能提交白名单模块的有序计划。
+- 不允许模型改写世界规则：模型对模组内容只产出封闭枚举内的语义分类（crop / food / station / hostile……），不写注册表、不改真实标签、不提供数值；分类以可回滚的知识文件存在，全量生效前必须通过校验。
 - 不暴露 `/op`、`/execute`、`/setblock` 等通用命令入口。
-- 不在首版实现挖矿、搭建复杂建筑、交互任意模组 GUI。
+- 无模型时不实现挖矿、搭建复杂建筑、交互任意模组 GUI；配置模型后仅允许通过已注册模块尝试简单建造与可观察交互，复杂 GUI 仍需 L3 bridge。
 - 不直接复制 TLM 的模型、声音或贴图资源。
 
 ## 3. 总体架构
 
 ```mermaid
 flowchart LR
-    CLI["Codex / Claude Code / 其他 MCP Client"]
-    MCP["MCP Streamable HTTP /mcp"]
-    HOST["Touhou Little Maid Mini McpHost"]
-    ACTION["Companion Action Facade"]
+    CLI["Codex / Claude Code / MCP Client"]
+    MCP["Inbound MCP /mcp"]
+    HOST["Action Facade"]
+    CLIENT["Client AgentLoop + LLM config"]
+    PLAN["Plan Gate + Plan Runner"]
+    BASE["Local baseline brain"]
     SERVER["Server Thread Dispatcher"]
-    BODY["Companion Entity + Brain"]
-    PRIM["Movement / Observation / Interaction / Inventory"]
-    SKILL["External Agent Skills + Data Tags"]
-    EVENT["Event Journal + Long Poll"]
-    SAFE["Local Safety / Permission"]
+    BODY["Companion Entity / Goals"]
+    PRIM["Move / Observe / Interact / Inventory"]
+    MOD["Action Modules"]
+    SKILL["Static + learned Skills / Data Tags"]
+    EVENT["Event Journal / Long Poll"]
+    SAFE["Local Safety / Permission / Audit"]
 
     CLI <--> MCP
     MCP <--> HOST
-    HOST <--> ACTION
-    ACTION <--> SERVER
-    SERVER <--> BODY
-    BODY <--> PRIM
+    CLIENT -->|plan| PLAN
+    PLAN --> HOST
+    PLAN --> MOD
+    MOD --> HOST
+    HOST --> SERVER
+    BASE --> BODY
+    SERVER --> BODY
+    BODY --> PRIM
     SKILL --> CLI
+    SKILL --> CLIENT
     BODY --> EVENT
     EVENT --> HOST
+    EVENT --> CLIENT
     SAFE --> BODY
+    SAFE --> HOST
+    SAFE --> PLAN
 ```
 
 ### 3.1 模块
 
 | 模块 | 职责 | 是否依赖 Minecraft |
 |---|---|---|
-| `tlm-mini-core` | 通用动作、操作状态、事件模型、配置模型 | 否 |
+| `tlm-mini-core` | 通用动作、计划模型、操作状态、事件模型、配置模型 | 否 |
 | `tlm-mini-mcp` | 把 core 映射为 MCP 工具和长轮询事件 | 否 |
-| `tlm-mini-fabric` | Fabric 入口、实体、Brain、动作执行器、注册、持久化和网络 | 是 |
+| `tlm-mini-llm` | OpenAI 兼容 HTTP 客户端、计划响应解析、Skill 提案校验 | 否 |
+| `tlm-mini-fabric` | Fabric 入口、实体、Brain、动作模块、计划执行器、注册、持久化和网络 | 是 |
 | `tlm-mini-neoforge` | Fabric 稳定后的 Neoforge 适配层 | 是 |
-| `tlm-mini-client` | 渲染、声音、管理界面和客户端同步 | 是 |
+| `tlm-mini-client` | 渲染、声音、管理界面、客户端模型循环与计划提交 | 是 |
 
 为减少首版复杂度，可以先用一个 Gradle 项目承载，但包边界必须按上表保留。首版
 验收目标和 `0.1.0-beta` 发布物只要求 Fabric；纯 Java
@@ -116,6 +134,17 @@ flowchart LR
 改为自研本项目所需的最小协议层。若上游接口与本项目的动作、权限或审计边界不一致，
 以本项目的 `core` 和 MCP 契约为准。
 
+### 3.3 模块化计划
+
+- 模型只提交**计划**（有序模块调用 + 参数 + 有界条件），不提交代码；因此不存在解释器、
+  沙箱逃逸或死循环，计划可在执行前完整校验步数、成本与风险。
+- 模块由 Java 预制，声明参数 schema、风险等级、预估成本与可读失败码，全部走
+  Action、Permission、Audit 的唯一入口。
+- 客户端负责模型调用、密钥与本机 UI；服务端负责权威校验与执行，只收发计划与裁剪后的观察。
+- 外部 MCP Agent 仍使用工具调用；它与客户端计划最终落到同一套动作入口。
+- 完整规格、模块清单、计划 schema 与里程碑见
+  [`docs/10-autonomy-and-scripting.md`](10-autonomy-and-scripting.md)。
+
 ## 4. 同伴身体
 
 ### 4.1 实体
@@ -125,7 +154,8 @@ flowchart LR
 
 - 跟随主人。
 - 待命和返回家。
-- 附近敌人自卫。
+- 守卫主人与自卫；在 work radius 内主动攻击威胁主人的怪物。
+- 按 `minecraft:crops` 标签与方块 `age` 属性收割成熟作物并用匹配种子补种。
 - 饥饿进食。
 - 危险方块、坠落、窒息等安全反射。
 - 长距离移动的分段寻路。
@@ -133,7 +163,10 @@ flowchart LR
 同伴不是 `ServerPlayer`。该选择意味着：
 
 - 客户端必须安装本模组以渲染自定义实体。
-- 首版不做通用玩家级挖掘、建造和 GUI 操作。
+- 玩家的“在线人数 / 权限 / 保护插件”不会把同伴当成玩家。
+- 需要 `Player` 参数的放置、使用与合成 API，使用一个**不注册进玩家列表**的
+  `ServerPlayer` 上下文代理（不 join、不进 TAB、不加载区块）；同伴仍是唯一可见身体。
+- 不提供无界挖掘/建造；可做的范围由模块白名单与保护区决定。
 - 可以低成本实现 TLM 风格模型、动画、装备和叫声。
 
 ### 4.2 状态机
@@ -165,8 +198,9 @@ DORMANT -> SPAWNING -> IDLE <-> ACTIVE
 | `follow` | 每 tick 读取主人状态，持续寻路和保持安全距离 |
 | `stay` | 持续处理工作点、意外受击和返回安全位置 |
 | `guard` | 即时识别威胁、检查攻击白名单和自卫 |
+| `farm` | 周期性扫描有限半径内的作物，按标签和方块状态收割补种 |
 
-这些是长期策略，不是固定玩法。Agent 可以切换策略，但不能绕过本地安全优先级。
+这些是确定性基础脑，不是固定玩法。外部 Agent 或客户端计划可以切换策略，但不能绕过本地安全优先级。
 
 ### 5.2 通用动作
 
@@ -179,6 +213,10 @@ DORMANT -> SPAWNING -> IDLE <-> ACTIVE
 | `interact` | 对方块、掉落物实体或空中使用左右键；读取真实结果 |
 | `inventory` | 查看、取放、装备、丢弃、阅读书和简单容器操作 |
 | `wait` | 等待完成事件，避免 Agent 高频轮询 |
+
+`M6` 起在此之上增加挖掘、放置、容器读写、合成与熔炼能力，并以**动作模块**的形式对模型
+暴露，而不是为每种玩法新增工具或 Task。模块清单与参数契约见
+[`docs/10-autonomy-and-scripting.md`](10-autonomy-and-scripting.md)。
 
 Agent 根据实时结果决定下一步。例如农作流程：
 
@@ -198,8 +236,16 @@ observe(blocks, tag=minecraft:crops)
 ### 5.3 Skill 与数据
 
 - Skill 用 Markdown 描述玩法、前置条件、失败恢复和安全注意。
+- 静态 Skill 随模组发布；模型提出的学习 Skill 必须经玩家确认后才写入配置目录并可执行。
 - 数据标签声明作物、种子、敌对实体和可交互方块。
-- Agent 负责组合；Java 不判断“用户想做农作还是钓鱼”。
+- 语义判定统一走 `SemanticTags`：真实数据 > 真实标签 > 玩家知识 > 模型分类 > 启发式 > 未分类。
+  模型分类是 L1 适配的自动化，写入 `config/tlmm/knowledge/*.json`，可审阅、可按批回滚，
+  不覆盖真实标签与数值（见 `docs/10` §10）。
+- 基础脑处理确定的高频循环；模型负责未知组合，Java 不判断“用户想做农作还是钓鱼”。
+- 主动作业能力由背包内工具决定：采石要镐、砍树要斧、开垦要锄；缺工具不生成机会，
+  自主模式也绝不从箱子取工具。工具等级不足与缺工具是两个失败码（见 `docs/10` §3.4）。
+- 箱子整理走确定性算法（同类归并），只在登记仓库之间移动，不搬进同伴背包，不碰保留箱；
+  模型可以决定“要不要整理”，但不能决定“怎么搬”（见 `docs/10` §3.5）。
 - 只有客户端专属 UI、无法用原版交互表达的模组功能才增加专用 bridge。
 
 ### 5.4 什么情况下新增 Java
@@ -351,7 +397,9 @@ world/touhou_little_maid_mini/companions/<uuid>/events.jsonl
 - 仅允许 Bearer Header，Token 不得出现在 URL。
 - 默认关闭 MCP，管理员显式打开。
 - Origin 校验、每 Token 限流、总并发限制和失败认证限速必须启用。
-- 开源默认配置不能包含固定 Token。
+- 开源默认配置不能包含固定 MCP Token 或模型 API Token。
+- 出站模型请求只发送到玩家在 UI 中确认的 base URL；禁止模型返回任意 URL、命令或脚本后自动执行。
+- 模型响应必须解析为受限动作集合，并复用 PermissionBroker 与 AuditLog。
 
 ## 9. 客户端与界面
 
@@ -362,6 +410,8 @@ world/touhou_little_maid_mini/companions/<uuid>/events.jsonl
 - 中部显示 9 格小背包和装备。
 - 底部设置 home、半径、日程、跟随/待命。
 - MCP 连接状态只显示“已连接/未连接/已暂停”，不展示 Token。
+- 新增客户端 AI 设置页，填写 base URL、model name 与 API Key；Key 只保存在该客户端，输入框只显示掩码，保存后不明文回显或写日志。
+- 新增 Chat 页与任务卡：输入指令、查看当前步骤与进度、取消任务。
 
 首版使用简单人形渲染和状态图标。阶段 4 再评估兼容 `26.3` 的 GeckoLib 或自有轻量
 模型包格式。TLM 代码是 MIT，但其模型、声音和贴图采用 CC BY-NC-SA 4.0；不能把
@@ -369,7 +419,7 @@ TLM 视觉资源当作普通 MIT 资源打包。
 
 ## 10. 配置
 
-候选服务端配置：
+服务端配置（权威，不含任何模型密钥）：
 
 ```toml
 enabled = true
@@ -379,9 +429,37 @@ require_token = true
 disconnect_grace_seconds = 60
 continue_operation_after_disconnect = false
 safe_mode_after_disconnect = "stay"
+
+[autonomy]
+level = "chores"
+idle_cooldown_seconds = 90
+max_tasks_per_hour = 6
+threat_radius = 16
+min_health_percent = 60
+storage_chests = []
+protect_home_radius = 16
+
+[plan]
+max_steps = 24
+max_actions = 400
+max_seconds = 600
+max_blocks_broken = 128
+replan_on = "failure"
 ```
 
-完整示例见 [`config-examples/touhou-little-maid-mini-server.toml`](../config-examples/touhou-little-maid-mini-server.toml)。
+客户端配置（模型地址与模型名；Key 另存 `config/tlmm/credentials.key`）：
+
+```toml
+base_url = "https://api.openai.com/v1/chat/completions"
+planner_model = "gpt-4o-mini"
+idle_model = "gpt-4o-mini"
+request_timeout_seconds = 30
+max_requests_per_minute = 6
+```
+
+模型 Key 不写入任何示例文件，也不进入服务端配置。完整示例见
+[`config-examples/touhou-little-maid-mini-server.toml`](../config-examples/touhou-little-maid-mini-server.toml)
+与 [`config-examples/touhou-little-maid-mini-client.toml`](../config-examples/touhou-little-maid-mini-client.toml)。
 
 ## 11. 兼容策略
 
@@ -396,7 +474,8 @@ CompanionProvider
 ```
 
 MCP 工具名和动作 schema 保持不变，只替换实体提供者。TLM 已有 Task 只作为可选能力
-暴露，不成为核心 MCP 契约的一部分。
+暴露，不成为核心 MCP 契约的一部分。三脑模式不依赖 TLM 类：基础脑在本项目内以少量
+通用 Goal 实现，直连模型沿用 OpenAI 兼容配置思路而非其 SDK。
 
 ### 11.2 其他模组
 
@@ -420,5 +499,8 @@ MCP 工具名和动作 schema 保持不变，只替换实体提供者。TLM 已�
 | 模型包兼容成本 | 视觉开发拖延 | 首版简单模型；Gecko/TLM 兼容放到后续阶段 |
 | Agent 断线后失控 | 世界风险 | 默认停止外部操作，回到本地安全待命 |
 | 工具表膨胀 | 上下文成本与误调用 | 首要工具不超过 10 个，上下文按类别加载 |
-| 动作太原子导致模型调用过多 | 成本高、速度慢 | 上下文过滤、批量交互、Skill 约束和必要的受限循环执行器 |
+| 动作太原子导致模型调用过多 | 成本高、速度慢 | 上下文过滤、批量交互、Skill 约束和基础脑处理高频循环 |
+| API Token 被日志或配置泄露 | 账号与费用风险 | UI 掩码、独立凭据文件、日志脱敏、仓库禁止提交真实 Token |
+| 模型幻觉出新工具或任意操作 | 世界破坏风险 | 固定动作枚举、强类型 schema、权限确认、审计日志 |
+| 学习 Skill 未经审阅直接执行 | 错误流程反复运行 | `learned_skills=review`，先保存提案再由玩家确认 |
 

@@ -61,6 +61,27 @@ $env:TLMM_MCP_TOKEN = "<一次性开发 Token>"
 
 开发 Token 拥有全部同伴的完整作用域。不要把 Token 写进仓库、截图或 `fabric.mod.json`。
 
+## 3.5 游戏内配置直连模型（可选，`0.1.0-beta`）
+
+> `M6` 起模型调用迁移到玩家客户端，Key 只存客户端，服务端不再发起请求。
+> 本节的命令与服务端凭据文件仅适用于当前 `0.1.0-beta`；升级后按
+> [`docs/10-autonomy-and-scripting.md`](10-autonomy-and-scripting.md) 在客户端配置。
+
+右键同伴打开管理界面，点击“AI 设置”，填写 OpenAI 兼容的 base URL、model name 和
+API Token。也可以由 owner 或 OP 使用命令：
+
+```text
+/tlmm llm base <url>
+/tlmm llm model <model>
+/tlmm llm token <token>
+/tlmm llm enabled true
+```
+
+base URL 应指向 chat completions 端点，例如
+`https://api.openai.com/v1/chat/completions`。Token 只保存在服务端配置目录的独立凭据
+文件中，不会出现在聊天回显、日志或审计记录；输入框只显示掩码。未配置模型时同伴仍
+可执行跟随、驻守、守卫和作物收割。
+
 ## 4. 启动 MCP 端点
 
 端点默认由配置中的 `enabled = true` 控制，但只有存在至少一个可用 Token 时才会启动。

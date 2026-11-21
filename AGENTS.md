@@ -2,19 +2,33 @@
 
 ## 当前阶段
 
-当前处于 Fabric M0 技术验证：Gradle 多模块骨架、最小 MCP 端点、测试实体和
-GameTest 已建立。完成真实客户端渲染、全新构建和 `docs/02-development-plan.md`
-的 M0 验收后，才能创建 M0 完成提交并进入 M1。
+`0.1.0-beta` 与 `M5` 双脑切片已完成并验证。`M6` 方向已确认：模块化计划 +
+客户端大脑。当前处于 `M6.0` 之前的实现准备阶段，尚未开始写模块框架代码；
+按 `docs/10-autonomy-and-scripting.md` 推进。
 
 ## 不可改变的边界
 
 - 首发和主验证加载器是 Minecraft `26.3`、Fabric、Java 25。NeoForge 保留为后续适配，
   不阻塞首个 Fabric `0.1.0-beta`。
-- 外部 Agent CLI 是唯一模型大脑；发行模组不得包含 API Key、LLM SDK、STT 或 TTS。
-- 不为每种作物、工作或模组新增一个 Java Task。玩法决策必须优先由 Agent、Skill、
-  数据标签和通用动作组合完成。
+- 采用三脑模式：无模型的基础脑、外部 MCP Agent、客户端直连模型。**模型调用只在客户端**：
+  服务端不保存 API Key、不发起模型请求，只做计划校验与执行。发行模组不内置第三方
+  LLM SDK、STT 或 TTS。
+- 无模型时必须具备参考原版 TLM 的基础能力：跟随、回家驻守、持武器时守卫并主动攻击威胁主人的怪物、按数据标签收割成熟作物并补种、按同类归并整理登记仓库。空手不参与战斗，被攻击时后撤并播报，不还手。
+- 模型不写代码，只提交"模块序列 + 参数"的计划。动作模块由 Java 预制、强类型、可单测；
+  模块清单不随模组数量增长。
+- 不为每种作物、工作或模组新增一个 Java 模块。玩法决策优先由本地基础行为、Skill、
+  数据标签和通用模块组合完成；模型只扩展未知场景，不替代安全规则。
+- 模组内容由模型补语义分类，不写注册表：只能从封闭枚举取类别，写入可审阅、可回滚的
+  `config/tlmm/knowledge/*.json`。不得覆盖真实标签或数值；`hostile` 必须玩家确认才对
+  `guard` 生效。
+- 工具即授权：主动作业只用同伴背包现有的工具，缺工具不生成机会、不静默降级；
+  自主模式永不从箱子取工具或装备。玩家把工具放进背包就是授权动作。空手不还手，
+  被攻击时只后撤并向主人播报；有剑或斧才进入还击与巡逻。
+- 箱子整理是确定性 Java 算法（同类归并 + 数量守恒），只在登记仓库之间移动，不搬进同伴
+  背包、不碰保留箱与玩家正在使用的容器；模型只能决定是否整理，不能决定怎么搬。
 - MCP 默认只能绑定回环地址，专用服默认关闭。
-- 不提供任意命令、任意脚本、反射执行或服务器控制台工具。
+- 不提供任意命令、任意脚本、反射执行或服务器控制台工具；不接受宿主级代码、Lua/JS
+  或动态加载。
 - 世界修改动作必须经过权限、事件和审计的唯一入口。
 - 不把 TouhouLittleMaid 的内部类作为首版依赖。
 
@@ -27,6 +41,7 @@ GameTest 已建立。完成真实客户端渲染、全新构建和 `docs/02-deve
 - MCP 契约：[`docs/04-mcp-contract.md`](docs/04-mcp-contract.md)
 - Skill 与模组适配：[`docs/05-skill-and-extension-model.md`](docs/05-skill-and-extension-model.md)
 - 版本升级 Runbook：[`docs/06-version-upgrade-playbook.md`](docs/06-version-upgrade-playbook.md)
+- 自主模式与模块化计划：[`docs/10-autonomy-and-scripting.md`](docs/10-autonomy-and-scripting.md)
 
 设计变化先改文档，再改实现。实现与文档冲突时，不能默认文档错误；必须明确决定哪一份
 是新的真源。
@@ -36,15 +51,16 @@ GameTest 已建立。完成真实客户端渲染、全新构建和 `docs/02-deve
 开始建立 Gradle 工程后，目录目标为：
 
 ```text
-core/      纯 Java 的通用动作、事件和状态模型
+core/      纯 Java 的通用动作、计划模型、事件和状态模型
 mcp/       MCP host、参数解码和协议映射
-fabric/    Fabric 入口、实体、Brain、动作执行器、注册和持久化
+llm/       模型 HTTP 客户端与响应解析，纯 Java，不依赖 Minecraft
+fabric/    Fabric 入口、实体、Brain、动作模块、计划执行器、注册和持久化
 neoforge/  实体、Brain、动作执行器、注册和持久化
-client/    渲染、界面和客户端同步
+client/    渲染、界面、客户端模型循环与计划提交
 ```
 
-`core` 与 `mcp` 不得 import Minecraft、Fabric 或 NeoForge。HTTP 线程不得直接修改世界；
-所有身体动作必须切到服务端主线程执行。
+`core`、`mcp`、`llm` 不得 import Minecraft、Fabric 或 NeoForge。模型请求线程不得直接修改世界；
+客户端不得持有权威世界状态，计划只能通过 C2S 包进入服务端校验后执行。
 
 ## 验证顺序
 
@@ -67,10 +83,12 @@ client/    渲染、界面和客户端同步
 
 - MCP 工具名进入 `0.1` 后保持稳定。
 - 新字段优先以可选字段加入；删除或重命名字段需要新 major schema 版本。
-- 新玩法先尝试 Skill、数据标签和现有动作组合。
-- 只有逐刻控制、客户端专属交互或安全性不能在 Agent 层可靠完成时，才新增 Java Provider。
-- 新 Provider 必须复用 Action、Event、Permission 和 Audit 的现有入口。
-- 新增世界修改能力必须同时更新测试矩阵和安全文档。
+- 新玩法先尝试本地基础行为、Skill、数据标签和现有动作组合。
+- 只有逐刻控制、客户端专属交互或安全性不能在模型层可靠完成时，才新增 Java Provider。
+- 模型“学习”只产生可审阅的 Skill/计划模板，不进行模型训练，也不生成代码。
+- 新增动作模块必须声明参数 schema、风险等级、预估成本与失败码，并复用 Action、Event、
+  Permission 和 Audit 的现有入口。
+- 服务端新增世界修改能力必须同时更新测试矩阵和安全文档；客户端不得拥有权威世界状态。
 
 ## 升级规则
 

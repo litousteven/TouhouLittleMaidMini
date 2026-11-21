@@ -1,0 +1,38 @@
+# Touhou Little Maid Mini client configuration.
+# Model calls happen only on this client. The API key is NOT stored in this file; it is
+# written to config/tlmm/credentials.key (single line) and never sent to the server.
+
+config_version = 1
+base_url = "https://api.openai.com/v1/chat/completions"
+# Stronger model used to write plans.
+planner_model = "gpt-4o-mini"
+# Cheap model used for idle opportunity selection and small talk.
+idle_model = "gpt-4o-mini"
+request_timeout_seconds = 30
+max_requests_per_minute = 6
+temperature = 0.2
+max_output_tokens = 1200
+
+[agent]
+# off | suggest | chores | free. The server config is authoritative; this only mirrors the
+# client-side UI preference.
+autonomy_hint = "chores"
+# Keep the last N conversation turns for the chat mode.
+conversation_turns = 6
+# Ask the model for the remaining steps only when a step fails.
+replan_on = "failure"
+# Show a chat line when an autonomous task starts and finishes.
+announce_tasks = true
+
+[knowledge]
+# Let the model classify modded items/blocks/entities the server has not seen before.
+# The server decides what to ask and validates every answer; nothing is applied here.
+enabled = true
+# Entries per classification request. Fewer = cheaper, more round trips.
+batch_size = 64
+# Classification requests per minute.
+max_batches_per_minute = 1
+# Language for the display names sent along with ids. "auto" follows the game language.
+name_language = "auto"
+# Ask before submitting a hostile proposal, even if the model is confident.
+confirm_before_submit_hostile = false

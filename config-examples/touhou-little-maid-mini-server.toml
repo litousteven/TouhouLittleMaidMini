@@ -29,6 +29,71 @@ default_event_wait_seconds = 50
 # Generic action families exposed through MCP. Removing one removes every tool in it.
 enabled = ["move", "observe", "interact", "inventory", "wait", "stop"]
 
+# Model configuration moved to the client. The server never reads, stores or forwards an
+# API key, and never calls a model. See touhou-little-maid-mini-client.toml.
+# A legacy [llm] block is ignored with a migration hint and is never deleted automatically.
+
+[autonomy]
+# off | suggest | chores | free. "chores" only runs the safe whitelist.
+level = "chores"
+# Minimum idle time after a task before the director may propose another one.
+idle_cooldown_seconds = 90
+max_tasks_per_hour = 6
+# Refuse autonomous work while hostiles are within this radius.
+threat_radius = 16
+min_health_percent = 60
+# Registered storage containers. Empty means "only containers inside the home radius".
+storage_chests = []
+# No autonomous digging or placing inside this radius around home.
+protect_home_radius = 16
+protected_tag = "tlmm:protected"
+
+[tools]
+# inventory_only: autonomous work may only use tools already in the maid's inventory.
+# Command mode may still fetch a tool the player names explicitly.
+tool_policy = "inventory_only"
+# Stop proactive work when the tool is this worn, so the player's good gear is not used up.
+min_durability = 10
+# What an unarmed maid does when attacked: "flee" retreats and reports, "none" stands still.
+# She never fights back bare-handed, and never patrols for targets without a sword or axe.
+unarmed_behavior = "flee"
+
+[tidy]
+enabled = true
+# Deterministic merge-only sorting between registered chests. Nothing leaves the storage area.
+max_slot_moves = 200
+max_seconds = 120
+max_stacks_per_trip = 1
+# Keep at least this many empty chests as buffer for overflow.
+keep_empty_chests = 1
+# Skip chests the player is standing next to (they are probably using them).
+skip_near_player_radius = 5
+# Chests with this tag, or named "keep:*", are never touched.
+preserve_tag = "tlmm:keep"
+
+[plan]
+max_steps = 24
+max_actions = 400
+max_seconds = 600
+max_blocks_broken = 128
+max_plan_bytes = 16384
+# failure | every_step | never
+replan_on = "failure"
+
+[knowledge]
+# The server owns the overlay files and the unknown-content scanner. The client only
+# supplies classification proposals, which are validated here before taking effect.
+enabled = true
+# Only scan content that appeared in inventories, nearby blocks/entities or used recipes.
+scope = "observed"
+# Safety categories (crop / food / station / container / ...) apply immediately.
+auto_apply_safe_categories = true
+# hostile is never auto-applied: proposals land in "pending" until a player approves.
+require_confirm_for_hostile = true
+max_pending_proposals = 256
+# Never ask the model about these namespaces; vanilla already has authoritative tags.
+deny_namespaces = ["minecraft"]
+
 [safety]
 # Timeout for the in-game one-shot authorization prompt.
 owner_confirmation_timeout_seconds = 120
