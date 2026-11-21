@@ -24,7 +24,7 @@ import org.slf4j.LoggerFactory;
 public final class Tlmm {
 
     public static final String MOD_ID = "tlmm";
-    public static final String MOD_VERSION = "0.1.0-alpha.1";
+    public static final String MOD_VERSION = "0.1.0-beta";
     public static final String MINECRAFT_VERSION = "26.3";
     public static final Logger LOGGER = LoggerFactory.getLogger(MOD_ID);
 

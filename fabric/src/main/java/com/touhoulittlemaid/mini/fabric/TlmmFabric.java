@@ -1,5 +1,6 @@
 package com.touhoulittlemaid.mini.fabric;
 
+import com.touhoulittlemaid.mini.core.CompanionServerConfig;
 import com.touhoulittlemaid.mini.core.PlatformState;
 import com.touhoulittlemaid.mini.fabric.command.CompanionCommands;
 import com.touhoulittlemaid.mini.fabric.config.CompanionConfigs;
@@ -8,6 +9,7 @@ import com.touhoulittlemaid.mini.fabric.mcp.FabricCompanionBackend;
 import com.touhoulittlemaid.mini.fabric.persistence.M0SavedData;
 import com.touhoulittlemaid.mini.fabric.persistence.TokenSavedData;
 import com.touhoulittlemaid.mini.fabric.runtime.CompanionRuntimeState;
+import com.touhoulittlemaid.mini.fabric.runtime.ServerDiagnostics;
 import com.touhoulittlemaid.mini.mcp.CompanionTokenStore;
 import com.touhoulittlemaid.mini.mcp.CompanionTools;
 import com.touhoulittlemaid.mini.mcp.EventBus;
@@ -29,7 +31,7 @@ import org.slf4j.LoggerFactory;
 public final class TlmmFabric implements ModInitializer {
 
     public static final String MOD_ID = "tlmm";
-    public static final String MOD_VERSION = "0.1.0-alpha.1";
+    public static final String MOD_VERSION = "0.1.0-beta";
     public static final String MINECRAFT_VERSION = "26.3";
     public static final Logger LOGGER = LoggerFactory.getLogger(MOD_ID);
 
@@ -46,6 +48,8 @@ public final class TlmmFabric implements ModInitializer {
         CompanionCommands.register();
         net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents.END_SERVER_TICK.register(
                 com.touhoulittlemaid.mini.fabric.runtime.AgentWatchdog::tick);
+        net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents.END_SERVER_TICK.register(
+                ServerDiagnostics::tick);
         ServerLifecycleEvents.SERVER_STARTED.register(server -> {
             int saveVersion = M0SavedData.get(server).value();
             LOGGER.info("[m0] saved-data baseline value={}", saveVersion);
@@ -79,6 +83,7 @@ public final class TlmmFabric implements ModInitializer {
                 eventLog = null;
             }
             CompanionConfigs.reset();
+            ServerDiagnostics.reset();
             state.set(PlatformState.starting(MOD_VERSION, MINECRAFT_VERSION));
         });
         LOGGER.info("Touhou Little Maid Mini {} initialized on Fabric for Minecraft {}",
@@ -89,32 +94,50 @@ public final class TlmmFabric implements ModInitializer {
         if (mcpServer != null) {
             return;
         }
-        if (!Boolean.getBoolean("tlmm.mcp.enabled")) {
-            LOGGER.info("[mcp] disabled (set -Dtlmm.mcp.enabled=true for the development endpoint)");
+        CompanionServerConfig config = CompanionConfigs.current();
+        if (!config.mcpEnabled() && !Boolean.getBoolean("tlmm.mcp.enabled")) {
+            LOGGER.info("[mcp] disabled by config");
             return;
         }
-        String token = System.getenv("TLMM_MCP_TOKEN");
-        if (token == null || token.isBlank()) {
-            LOGGER.warn("[mcp] development endpoint not started: TLMM_MCP_TOKEN is not set");
+        String environmentTokenValue = System.getenv("TLMM_MCP_TOKEN");
+        boolean hasEnvironmentToken =
+                environmentTokenValue != null && !environmentTokenValue.isBlank();
+        if (!hasEnvironmentToken && TOKEN_STORE.list().isEmpty()) {
+            LOGGER.warn("[mcp] not started: no bearer token exists; create one with "
+                    + "/tlmm mcp token create <days> or set TLMM_MCP_TOKEN for development");
             return;
         }
 
-        int port = Integer.getInteger("tlmm.mcp.port", 8765);
-        TokenAuthenticator environmentToken = TokenAuthenticator.staticToken(
-                token, scopeFromEnvironment());
+        String bootstrapToken = hasEnvironmentToken
+                ? environmentTokenValue
+                : "store-only-" + java.util.UUID.randomUUID();
+        TokenAuthenticator environmentToken = hasEnvironmentToken
+                ? TokenAuthenticator.staticToken(environmentTokenValue, scopeFromEnvironment())
+                : bearer -> java.util.Optional.empty();
         TokenAuthenticator authenticator = bearer -> TOKEN_STORE.authenticate(bearer)
                 .or(() -> environmentToken.authenticate(bearer));
+        McpServerConfig serverConfig = new McpServerConfig(
+                config.mcpHost(), config.mcpPort(), bootstrapToken,
+                config.limits().maxConcurrentCalls(),
+                config.limits().maxCallsPerMinutePerToken(),
+                config.limits().maxFailedAuthPerMinutePerIp(),
+                config.limits().defaultToolTimeoutSeconds(),
+                MOD_VERSION);
+        var registry = CompanionTools.registry(new FabricCompanionBackend(server,
+                        CompanionRuntimeState.eventBus()))
+                .filter(spec -> config.enabledActions()
+                        .contains(TokenScope.actionOf(spec.name())));
         McpServer candidate = new McpServer(
-                new McpServerConfig(McpServerConfig.LOOPBACK, port, token),
-                CompanionTools.registry(new FabricCompanionBackend(server,
-                        CompanionRuntimeState.eventBus())),
+                serverConfig,
+                registry,
                 authenticator,
-                event -> LOGGER.info(event.format()));
+                event -> LOGGER.info(event.format()),
+                ServerDiagnostics::cachedSnapshot);
         try {
             candidate.start();
             mcpServer = candidate;
             CompanionRuntimeState.setMcpConnected(true);
-            LOGGER.info("[mcp] listening on http://{}:{}{}", McpServerConfig.LOOPBACK,
+            LOGGER.info("[mcp] listening on http://{}:{}{}", config.mcpHost(),
                     candidate.port(), McpServer.PATH);
         } catch (Exception exception) {
             candidate.close();

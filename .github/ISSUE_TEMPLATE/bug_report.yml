@@ -1,0 +1,72 @@
+name: Bug report
+description: Report a reproducible problem without secrets.
+title: "[bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do not paste a bearer token, API key, full backpack, chat text or an absolute local
+        path. Redact the token in logs and screenshots before attaching them.
+  - type: input
+    id: version
+    attributes:
+      label: Mod version
+      placeholder: "0.1.0-beta"
+    validations:
+      required: true
+  - type: input
+    id: minecraft
+    attributes:
+      label: Minecraft / Fabric / Java
+      placeholder: "26.3 / 0.20.1 / 25"
+    validations:
+      required: true
+  - type: dropdown
+    id: environment
+    attributes:
+      label: Environment
+      options:
+        - Singleplayer client
+        - Dedicated server
+        - Client GameTest
+        - Unit test / build
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Reproduction steps
+      description: Include the command, MCP tool call or Skill step that triggers it.
+      placeholder: |
+        1. ...
+        2. ...
+        3. ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected result
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual result and error code
+      description: Include status/code from the tool result or the first server-side exception.
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Redacted logs
+      description: Remove tokens, absolute paths, full inventories and private chat.
+      render: text
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Safety check
+      options:
+        - label: I removed tokens, API keys and local absolute paths from this report.
+          required: true

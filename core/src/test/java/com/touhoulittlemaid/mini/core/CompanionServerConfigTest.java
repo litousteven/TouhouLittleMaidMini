@@ -113,6 +113,73 @@ class CompanionServerConfigTest {
     }
 
     @Test
+    void parsesLimitsSafetyAndEnabledActions() {
+        CompanionServerConfig.ParseResult result = CompanionServerConfig.parse("""
+                config_version = 1
+                [limits]
+                max_concurrent_calls = 8
+                max_calls_per_minute_per_token = 120
+                max_failed_auth_per_minute_per_ip = 5
+                default_tool_timeout_seconds = 45
+                default_event_wait_seconds = 30
+
+                [actions]
+                enabled = ["observe", "move", "interact"]
+
+                [safety]
+                owner_confirmation_timeout_seconds = 90
+                require_confirmation_for_other_players = false
+                require_confirmation_for_named_mobs = false
+                require_confirmation_for_villagers = true
+                require_confirmation_for_other_containers = false
+                """);
+        assertFalse(result.hasProblems(), () -> result.problems().toString());
+        assertFalse(result.migrated());
+        CompanionServerConfig config = result.config();
+        assertEquals(8, config.limits().maxConcurrentCalls());
+        assertEquals(120, config.limits().maxCallsPerMinutePerToken());
+        assertEquals(5, config.limits().maxFailedAuthPerMinutePerIp());
+        assertEquals(45, config.limits().defaultToolTimeoutSeconds());
+        assertEquals(30, config.limits().defaultEventWaitSeconds());
+        assertEquals(90, config.safety().ownerConfirmationTimeoutSeconds());
+        assertFalse(config.safety().requireConfirmationForOtherPlayers());
+        assertTrue(config.safety().requireConfirmationForVillagers());
+        assertEquals(java.util.Set.of(ActionKind.OBSERVE, ActionKind.MOVE,
+                ActionKind.INTERACT), config.enabledActions());
+    }
+
+    @Test
+    void missingVersionIsReportedAsMigrationAndWritesCurrentVersion() {
+        CompanionServerConfig.ParseResult result =
+                CompanionServerConfig.parse("port = 9000\n");
+        assertTrue(result.migrated());
+        assertFalse(result.hasProblems(), () -> result.problems().toString());
+        assertTrue(result.config().toToml().contains(
+                "config_version = " + CompanionServerConfig.CURRENT_CONFIG_VERSION));
+    }
+
+    @Test
+    void invalidActionListFallsBackToAllActions() {
+        CompanionServerConfig.ParseResult result = CompanionServerConfig.parse("""
+                config_version = 1
+                [actions]
+                enabled = ["observe", "farm"]
+                """);
+        assertTrue(result.hasProblems());
+        assertEquals(java.util.Set.copyOf(java.util.EnumSet.allOf(ActionKind.class)),
+                result.config().enabledActions());
+    }
+
+    @Test
+    void newerConfigVersionIsReportedButStillUsable() {
+        CompanionServerConfig.ParseResult result =
+                CompanionServerConfig.parse("config_version = 99\n");
+        assertTrue(result.hasProblems());
+        assertEquals(CompanionServerConfig.CURRENT_CONFIG_VERSION,
+                result.config().configVersion());
+    }
+
+    @Test
     void radiusAndSafetyHelpersClampToConfiguredLimits() {
         CompanionServerConfig config = new CompanionServerConfig(
                 true, "127.0.0.1", 8765, 16, 24, 12, 60, false, LocalBehavior.STAY, 30, 30, 7, 16);

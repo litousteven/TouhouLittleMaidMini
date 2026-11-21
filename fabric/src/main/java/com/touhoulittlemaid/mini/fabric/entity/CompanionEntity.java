@@ -108,6 +108,7 @@ public final class CompanionEntity extends TamableAnimal {
         super(type, level);
         setTame(true, true);
         setCanPickUpLoot(false);
+        setCompanionName(DEFAULT_NAME);
     }
 
     @Override

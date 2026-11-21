@@ -356,7 +356,8 @@ Token scope 之外的同伴不出现在结果中。
 ## 10. `companion_wait_events`
 
 长轮询，只读。请求在 HTTP 线程挂起，直到有该同伴的新事件或 `timeout_seconds` 到期；
-服务端主线程不被阻塞。
+服务端主线程不被阻塞。省略 `timeout_seconds` 时使用配置
+`[limits] default_event_wait_seconds`（默认 50 秒）。
 
 ```json
 {
@@ -433,11 +434,38 @@ Token scope 之外的同伴不出现在结果中。
 | `unsafe_area` | 环境不满足执行条件 |
 | `timeout` | 操作或等待超时 |
 | `event_cursor_expired` | 事件游标超出保留范围 |
+| `rate_limited` | 超过并发或单 Token 每分钟调用限制 |
 | `internal_error` | 未分类服务端错误 |
+
+认证失败超过 `[limits] max_failed_auth_per_minute_per_ip` 时，HTTP 层返回 `429`，不进入
+工具调用。并发与频率限制在工具调用入口执行；长轮询占用并发名额，并在返回后释放。
 
 错误文字应可直接交给模型修正；堆栈只进服务端日志。
 
-## 13. 版本策略
+## 13. `ping` 健康快照
+
+`ping` 不需要同伴，也不修改世界。除 JSON-RPC 正常响应外，它返回当前服务端健康快照，
+供浸泡脚本记录：
+
+```json
+{
+  "companion_count": 12,
+  "mspt_average": 0.31,
+  "mspt_max": 0.81,
+  "heap_used_mb": 393,
+  "heap_max_mb": 8092,
+  "thread_count": 34,
+  "event_sequence": 30,
+  "oldest_event_sequence": 1,
+  "retained_events": 30,
+  "mcp_connected": true
+}
+```
+
+`event_sequence` 与 `oldest_event_sequence` 是所有同伴共享的事件游标范围；具体同伴的
+事件仍通过 `companion_wait_events` 读取。快照不包含 Token、背包、聊天或本机路径。
+
+## 14. 版本策略
 
 - 工具名和已有必填参数在 `v1` 内保持稳定。
 - 新参数以可选字段加入。

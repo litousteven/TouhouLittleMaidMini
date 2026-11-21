@@ -1,0 +1,46 @@
+name: Feature request
+description: Propose a new Skill, data tag, action or compatibility layer.
+title: "[feature] "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        New gameplay should normally be a Skill or data tag over the existing generic
+        actions. Please explain why a new Java action provider is required if you propose
+        one, and keep the public MCP surface at ten tools or fewer.
+  - type: textarea
+    id: goal
+    attributes:
+      label: Goal and user-visible result
+    validations:
+      required: true
+  - type: textarea
+    id: current
+    attributes:
+      label: What the existing actions and Skills cannot express
+    validations:
+      required: true
+  - type: dropdown
+    id: layer
+    attributes:
+      label: Proposed extension layer
+      options:
+        - L0 generic action composition
+        - L1 data tags and Skill
+        - L2 Java action provider
+        - L3 client bridge
+    validations:
+      required: true
+  - type: textarea
+    id: safety
+    attributes:
+      label: Permissions, audit and stop conditions
+      description: What can change the world, whose property can be touched, and how it stops.
+  - type: textarea
+    id: tests
+    attributes:
+      label: Verification plan
+      description: Which unit test, GameTest, client test or dedicated-server E2E proves it?
+    validations:
+      required: true

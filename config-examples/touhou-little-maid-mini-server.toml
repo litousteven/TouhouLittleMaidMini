@@ -1,13 +1,17 @@
+# Touhou Little Maid Mini server configuration.
+# The MCP endpoint is loopback-only and never accepts a public bind address.
+# A bearer token is always required. Set TLMM_MCP_TOKEN for development or issue
+# per-companion tokens in game with /tlmm mcp token create <days>.
+config_version = 1
 enabled = true
 host = "127.0.0.1"
 port = 8765
-require_token = true
-disconnect_grace_seconds = 60
-continue_operation_after_disconnect = false
-safe_mode_after_disconnect = "stay"
 max_companions = 16
 max_action_radius = 64
 default_work_radius = 16
+disconnect_grace_seconds = 60
+continue_operation_after_disconnect = false
+safe_mode_after_disconnect = "stay"
 hunger_decay_seconds = 30
 low_health_percent = 30
 event_retention_days = 7
@@ -21,18 +25,16 @@ default_tool_timeout_seconds = 90
 default_event_wait_seconds = 50
 
 [actions]
-enabled = [
-  "observe",
-  "move",
-  "interact",
-  "inventory",
-  "wait"
-]
+# Generic action families exposed through MCP. Removing one removes every tool in it.
+enabled = ["move", "observe", "interact", "inventory", "wait", "stop"]
 
 [safety]
+# Timeout for the in-game one-shot authorization prompt.
 owner_confirmation_timeout_seconds = 120
+# The four target-class flags are validated and reserved for the interaction families
+# that will use them. The 0.1 beta only enables item drops, so they do not gate a
+# currently exposed action yet.
 require_confirmation_for_other_players = true
 require_confirmation_for_named_mobs = true
 require_confirmation_for_villagers = true
 require_confirmation_for_other_containers = true
-

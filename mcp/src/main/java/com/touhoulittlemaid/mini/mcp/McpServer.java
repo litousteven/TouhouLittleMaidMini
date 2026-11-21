@@ -10,14 +10,16 @@ import com.google.gson.JsonParser;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 import com.touhoulittlemaid.mini.core.ActionKind;
+import com.touhoulittlemaid.mini.core.ServerMetrics;
 import com.touhoulittlemaid.mini.core.ToolResult;
 import com.touhoulittlemaid.mini.core.ToolSpec;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
+import java.net.URI;
 import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
+import java.util.ArrayDeque;
+import java.util.Deque;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
@@ -25,6 +27,7 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Semaphore;
 
 /**
  * Minimal MCP 2025-11-25 Streamable HTTP endpoint used by the M0 probe.
@@ -44,12 +47,48 @@ public final class McpServer implements AutoCloseable {
     private final Gson gson;
     private final TokenAuthenticator authenticator;
     private final AuditLog.Sink auditSink;
+    private final java.util.function.Supplier<ServerMetrics> diagnostics;
 
     /** Replays a repeated request_id so a retried call never runs the body twice. */
     private final Map<String, Map<String, JsonObject>> idempotency = new LinkedHashMap<>();
 
+    private final Semaphore concurrentCalls;
+    private final Map<String, RateWindow> tokenWindows = new LinkedHashMap<>();
+    private final Map<String, RateWindow> failedAuthWindows = new LinkedHashMap<>();
+
     private HttpServer server;
     private ExecutorService executor;
+
+    /** Small synchronized sliding window; one instance per token or remote address. */
+    private static final class RateWindow {
+
+        private final Deque<Long> timestamps = new ArrayDeque<>();
+
+        synchronized boolean allow(int maxPerMinute) {
+            if (isFull(maxPerMinute)) {
+                return false;
+            }
+            timestamps.addLast(System.currentTimeMillis());
+            return true;
+        }
+
+        synchronized boolean isFull(int maxPerMinute) {
+            prune();
+            return timestamps.size() >= maxPerMinute;
+        }
+
+        synchronized void record() {
+            prune();
+            timestamps.addLast(System.currentTimeMillis());
+        }
+
+        private void prune() {
+            long cutoff = System.currentTimeMillis() - 60_000L;
+            while (!timestamps.isEmpty() && timestamps.peekFirst() < cutoff) {
+                timestamps.removeFirst();
+            }
+        }
+    }
 
     public McpServer(McpServerConfig config, ToolRegistry tools) {
         this(config, tools, TokenScope.FULL, event -> { });
@@ -63,10 +102,18 @@ public final class McpServer implements AutoCloseable {
 
     public McpServer(McpServerConfig config, ToolRegistry tools,
             TokenAuthenticator authenticator, AuditLog.Sink auditSink) {
+        this(config, tools, authenticator, auditSink, ServerMetrics::empty);
+    }
+
+    public McpServer(McpServerConfig config, ToolRegistry tools,
+            TokenAuthenticator authenticator, AuditLog.Sink auditSink,
+            java.util.function.Supplier<ServerMetrics> diagnostics) {
         this.config = Objects.requireNonNull(config, "config");
         this.tools = Objects.requireNonNull(tools, "tools");
         this.authenticator = Objects.requireNonNull(authenticator, "authenticator");
         this.auditSink = Objects.requireNonNull(auditSink, "auditSink");
+        this.diagnostics = Objects.requireNonNull(diagnostics, "diagnostics");
+        this.concurrentCalls = new Semaphore(config.maxConcurrentCalls(), true);
         this.gson = new Gson();
     }
 
@@ -121,12 +168,24 @@ public final class McpServer implements AutoCloseable {
                 sendJson(exchange, 404, error(null, -32600, "Not found"));
                 return;
             }
+            if (!allowedOrigin(exchange)) {
+                sendJson(exchange, 403, error(null, -32003, "Origin not allowed"));
+                return;
+            }
+            String remote = exchange.getRemoteAddress().getAddress().getHostAddress();
+            if (authenticationBlocked(remote)) {
+                sendJson(exchange, 429, error(null, -32002,
+                        "Too many failed authentication attempts"));
+                return;
+            }
             Optional<TokenPrincipal> principal = authenticate(exchange);
             if (principal.isEmpty()) {
+                recordAuthenticationFailure(remote);
                 exchange.getResponseHeaders().set("WWW-Authenticate", "Bearer");
                 sendJson(exchange, 401, error(null, -32001, "Invalid bearer token"));
                 return;
             }
+            clearAuthenticationFailures(remote);
             if (!"POST".equals(exchange.getRequestMethod())) {
                 exchange.getResponseHeaders().set("Allow", "POST");
                 sendJson(exchange, 405, error(null, -32600, "MCP Streamable HTTP endpoint expects POST"));
@@ -168,7 +227,7 @@ public final class McpServer implements AutoCloseable {
         String method = methodElement.getAsString();
         JsonElement result = switch (method) {
             case "initialize" -> initializeResult();
-            case "ping" -> new JsonObject();
+            case "ping" -> pingResult();
             case "tools/list" -> toolsListResult();
             case "tools/call" -> callTool(request.get("params"), principal);
             default -> null;
@@ -185,6 +244,30 @@ public final class McpServer implements AutoCloseable {
         sendJson(exchange, 200, response);
     }
 
+    private JsonObject pingResult() {
+        JsonObject result = new JsonObject();
+        try {
+            ServerMetrics metrics = diagnostics.get();
+            result.addProperty("companion_count", metrics.companionCount());
+            result.addProperty("mspt_average", round(metrics.msptAverage()));
+            result.addProperty("mspt_max", round(metrics.msptMax()));
+            result.addProperty("heap_used_mb", metrics.heapUsedMb());
+            result.addProperty("heap_max_mb", metrics.heapMaxMb());
+            result.addProperty("thread_count", metrics.threadCount());
+            result.addProperty("event_sequence", metrics.lastEventSequence());
+            result.addProperty("oldest_event_sequence", metrics.oldestEventSequence());
+            result.addProperty("retained_events", metrics.retainedEventCount());
+            result.addProperty("mcp_connected", metrics.mcpConnected());
+        } catch (RuntimeException exception) {
+            result.addProperty("diagnostics", "unavailable");
+        }
+        return result;
+    }
+
+    private static double round(double value) {
+        return Math.round(value * 100.0D) / 100.0D;
+    }
+
     private JsonObject initializeResult() {
         JsonObject capabilities = new JsonObject();
         capabilities.add("tools", new JsonObject());
@@ -192,14 +275,17 @@ public final class McpServer implements AutoCloseable {
         JsonObject serverInfo = new JsonObject();
         serverInfo.addProperty("name", "touhou-little-maid-mini");
         serverInfo.addProperty("title", "Touhou Little Maid Mini");
-        serverInfo.addProperty("version", "0.1.0-alpha.1");
+        serverInfo.addProperty("version", config.serverVersion());
 
         JsonObject result = new JsonObject();
         result.addProperty("protocolVersion", PROTOCOL_VERSION);
         result.add("capabilities", capabilities);
         result.add("serverInfo", serverInfo);
         result.addProperty("instructions",
-                "M0 diagnostics only. This endpoint exposes platform state; it cannot modify the world.");
+                "Touhou Little Maid Mini companion endpoint. Tools observe and drive one "
+                        + "companion through generic move, interact, inventory and wait actions. "
+                        + "World changes run on the server thread; destructive actions need "
+                        + "in-game owner approval.");
         return result;
     }
 
@@ -283,10 +369,24 @@ public final class McpServer implements AutoCloseable {
         }
 
         long startedAt = System.nanoTime();
-        ToolResult result = scopeCheck(toolName, principal.scope())
-                .orElseGet(() -> CompanionTools.withAllowedCompanions(
-                        principal.companionIds(),
-                        () -> tools.invoke(toolName, arguments)));
+        ToolResult result;
+        if (!allowTokenCall(principal.digestId())) {
+            result = ToolResult.rejected("rate_limited",
+                    "Token exceeded " + config.maxCallsPerMinutePerToken()
+                            + " calls per minute");
+        } else if (!concurrentCalls.tryAcquire()) {
+            result = ToolResult.rejected("rate_limited",
+                    "Server is at its concurrent call limit; retry shortly");
+        } else {
+            try {
+                result = scopeCheck(toolName, principal.scope())
+                        .orElseGet(() -> CompanionTools.withAllowedCompanions(
+                                principal.companionIds(),
+                                () -> tools.invoke(toolName, arguments)));
+            } finally {
+                concurrentCalls.release();
+            }
+        }
         JsonObject response = errorResult(result);
 
         long durationMillis = (System.nanoTime() - startedAt) / 1_000_000L;
@@ -437,6 +537,56 @@ public final class McpServer implements AutoCloseable {
         response.add("id", id == null ? JsonNull.INSTANCE : id);
         response.add("error", error);
         return response;
+    }
+
+    /** Browser requests are accepted only from a loopback origin; CLI clients send none. */
+    private static boolean allowedOrigin(HttpExchange exchange) {
+        String origin = exchange.getRequestHeaders().getFirst("Origin");
+        if (origin == null || origin.isBlank() || "null".equalsIgnoreCase(origin)) {
+            return true;
+        }
+        try {
+            URI uri = URI.create(origin);
+            String scheme = uri.getScheme();
+            if (scheme == null
+                    || (!"http".equalsIgnoreCase(scheme) && !"https".equalsIgnoreCase(scheme))) {
+                return false;
+            }
+            String host = uri.getHost();
+            return host != null && (McpServerConfig.LOOPBACK.equals(host)
+                    || "localhost".equalsIgnoreCase(host)
+                    || "::1".equals(host)
+                    || "[::1]".equals(host));
+        } catch (IllegalArgumentException exception) {
+            return false;
+        }
+    }
+
+    private boolean allowTokenCall(String digestId) {
+        synchronized (tokenWindows) {
+            return tokenWindows.computeIfAbsent(digestId, ignored -> new RateWindow())
+                    .allow(config.maxCallsPerMinutePerToken());
+        }
+    }
+
+    private boolean authenticationBlocked(String remote) {
+        synchronized (failedAuthWindows) {
+            RateWindow window = failedAuthWindows.get(remote);
+            return window != null
+                    && window.isFull(config.maxFailedAuthPerMinutePerIp());
+        }
+    }
+
+    private void recordAuthenticationFailure(String remote) {
+        synchronized (failedAuthWindows) {
+            failedAuthWindows.computeIfAbsent(remote, ignored -> new RateWindow()).record();
+        }
+    }
+
+    private void clearAuthenticationFailures(String remote) {
+        synchronized (failedAuthWindows) {
+            failedAuthWindows.remove(remote);
+        }
     }
 
     private Optional<TokenPrincipal> authenticate(HttpExchange exchange) {

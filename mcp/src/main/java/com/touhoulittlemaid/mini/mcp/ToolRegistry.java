@@ -51,6 +51,20 @@ public final class ToolRegistry {
         return entry == null ? Optional.empty() : Optional.of(entry.spec());
     }
 
+    /**
+     * Returns a new registry containing only the specs accepted by {@code predicate}.
+     * Used to honour the configured generic action families without changing handlers.
+     */
+    public synchronized ToolRegistry filter(java.util.function.Predicate<ToolSpec> predicate) {
+        ToolRegistry filtered = new ToolRegistry();
+        for (Entry entry : entries.values()) {
+            if (predicate.test(entry.spec())) {
+                filtered.register(entry.spec(), entry.handler());
+            }
+        }
+        return filtered;
+    }
+
     public ToolResult invoke(String name, Map<String, Object> arguments) {
         Entry entry;
         synchronized (this) {

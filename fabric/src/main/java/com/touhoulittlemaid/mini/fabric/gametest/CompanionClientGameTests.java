@@ -32,14 +32,19 @@ public final class CompanionClientGameTests implements FabricClientGameTest {
             singleplayer.getServer().runCommand("execute as @a at @s run tlmm summon");
 
             context.waitTicks(40);
+            singleplayer.getServer().runCommand("execute as @a at @s run tp @s ^ ^ ^-2");
+            context.waitTicks(10);
 
             int companionCount = companionCount(singleplayer);
             if (companionCount < 1) {
-                throw new IllegalStateException("M1 companion was not present on the server");
+                throw new IllegalStateException("M4 companion was not present on the server");
             }
 
-            Path screenshot = context.takeScreenshot("m1-companion-render");
-            requireScreenshot(screenshot, "M1 client screenshot");
+            Path screenshot = context.takeScreenshot("m4-companion-render");
+            requireScreenshot(screenshot, "M4 client screenshot");
+
+            singleplayer.getServer().runCommand("execute as @a at @s run tp @s ^ ^ ^2");
+            context.waitTicks(5);
 
             context.runOnClient(client -> {
                 var player = client.player;
@@ -55,8 +60,8 @@ public final class CompanionClientGameTests implements FabricClientGameTest {
 
             context.waitForScreen(CompanionScreen.class);
             context.waitTicks(5);
-            Path menuScreenshot = context.takeScreenshot("m1-companion-screen");
-            requireScreenshot(menuScreenshot, "M1 management screen");
+            Path menuScreenshot = context.takeScreenshot("m4-companion-screen");
+            requireScreenshot(menuScreenshot, "M4 management screen");
 
             boolean clicked = false;
             for (int attempt = 0; attempt < 20 && !clicked; attempt++) {
@@ -82,7 +87,7 @@ public final class CompanionClientGameTests implements FabricClientGameTest {
                         "behaviour button did not reach the server: " + behavior);
             }
 
-            TlmmFabric.LOGGER.info("[m1] client render screenshot={} menu={} companions={}",
+            TlmmFabric.LOGGER.info("[m4] client render screenshot={} menu={} companions={}",
                     screenshot.getFileName(), menuScreenshot.getFileName(), companionCount);
         }
     }

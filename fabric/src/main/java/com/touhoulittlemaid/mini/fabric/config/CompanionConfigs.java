@@ -46,7 +46,16 @@ public final class CompanionConfigs {
                 TlmmFabric.LOGGER.warn("[config] {}: {}", FILE_NAME, problem);
             }
             current = result.config();
-            TlmmFabric.LOGGER.info("[config] loaded config/{}", FILE_NAME);
+            if (result.migrated()) {
+                Files.writeString(path, current.toToml(), StandardCharsets.UTF_8);
+                TlmmFabric.LOGGER.info("[config] migrated config/{} to version {}",
+                        FILE_NAME, CompanionServerConfig.CURRENT_CONFIG_VERSION);
+            }
+            TlmmFabric.LOGGER.info("[config] loaded config/{} (limits: concurrent={}, "
+                            + "calls/min={}, failed-auth/min={})",
+                    FILE_NAME, current.limits().maxConcurrentCalls(),
+                    current.limits().maxCallsPerMinutePerToken(),
+                    current.limits().maxFailedAuthPerMinutePerIp());
         } catch (IOException | RuntimeException exception) {
             current = CompanionServerConfig.defaults();
             TlmmFabric.LOGGER.warn("[config] could not read config/{}; using defaults ({})",

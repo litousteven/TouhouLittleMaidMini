@@ -84,6 +84,34 @@ loom {
     }
 }
 
+def langFiles = [
+        rootProject.file('client/src/main/resources/assets/tlmm/lang/en_us.json'),
+        rootProject.file('client/src/main/resources/assets/tlmm/lang/zh_cn.json')
+]
+
+tasks.register('verifyTranslations') {
+    group = 'verification'
+    description = 'Fails when the English and Chinese language files do not share keys.'
+    inputs.files(langFiles)
+    doLast {
+        def slurper = new groovy.json.JsonSlurper()
+        def english = slurper.parse(langFiles[0])
+        def chinese = slurper.parse(langFiles[1])
+        def missingInChinese = (english.keySet() - chinese.keySet()).sort()
+        def missingInEnglish = (chinese.keySet() - english.keySet()).sort()
+        if (!missingInChinese.isEmpty() || !missingInEnglish.isEmpty()) {
+            throw new GradleException("Translation keys differ. "
+                    + "missing in zh_cn=${missingInChinese}, "
+                    + "missing in en_us=${missingInEnglish}")
+        }
+        logger.lifecycle("Translation keys match: {} keys", english.size())
+    }
+}
+
+tasks.named('check') {
+    dependsOn 'verifyTranslations'
+}
+
 processResources {
     def expandProps = [
             version                      : version,

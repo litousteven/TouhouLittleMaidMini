@@ -5,12 +5,13 @@
 当前目标：Minecraft `26.3`、Fabric 首发、Java `25`。NeoForge 只保留后续适配，
 不作为 `0.1` 门禁。
 
-**M0、M1、M2、M3 已完成，下一步 M4。**
+**M0、M1、M2、M3 已完成；M4 发布候选已完成实现与短时验证，24 小时浸泡为发布操作者门禁。**
 
 - M0 验收：[`docs/validation/M0.md`](docs/validation/M0.md)
 - M1 验收：[`docs/validation/M1.md`](docs/validation/M1.md)
 - M2 验收：[`docs/validation/M2.md`](docs/validation/M2.md)
 - M3 验收：[`docs/validation/M3.md`](docs/validation/M3.md)
+- M4 验收：[`docs/validation/M4.md`](docs/validation/M4.md)
 
 ## Git 状态
 
@@ -274,6 +275,48 @@ M2 结论：**Go**。协议、认证、作用域、审计、幂等、事件、�
 明确的交互边界见 [`docs/validation/M3.md`](docs/validation/M3.md) 第 4 节：原版
 `FishingHook` 与 `Entity.interact` 都要求 `Player`，空气与钓鱼留待后续 L2 provider。
 
+## M4 进度：发布候选
+
+验收记录：[`docs/validation/M4.md`](docs/validation/M4.md)。
+
+已完成并验证：
+
+- 客户端：`CompanionModel` 在原版人体网格上增加蝴蝶结，原创 128x128 皮肤；行走与
+  空闲呼吸动画；名字常驻；头顶第二行显示生命、饥饿、MCP/本地和当前行为。
+- 管理界面重排为 176x240，增加心形/食物图标、MCP 状态点、地址复制按钮、复制反馈、
+  悬停槽位高亮和 MCP/家/日程提示。
+- 中英文语言文件扩展到 64 个键；`:fabric:verifyTranslations` 校验两语言键集合一致。
+  命令反馈使用 `translatableWithFallback`，服务器控制台仍有英文回退。
+- 配置新增 `config_version`、`[limits]`、`[actions]`、`[safety]`；缺少版本时自动补全并
+  重写；无效值回退并记录原因。`[actions] enabled` 通过工具注册表过滤真正生效。
+- MCP 端点由配置 `enabled` 和可用 Token 决定启动；不再强制 `TLMM_MCP_TOKEN`。有按同伴
+  Token 但没有环境 Token 时也能启动。`[limits]` 已接入并发、单 Token 频率和认证失败
+  IP 限制；`ping` 返回 MSPT、堆、线程与事件序列。
+- 新增 `/tlmm diag`、`ServerDiagnostics`、`scripts/e2e-mcp.ps1`、`scripts/soak.ps1`。
+- 版本升级到 `0.1.0-beta`；新增 `LICENSE`、`THIRD_PARTY_NOTICES.md`、
+  `docs/07-installation.md`、`docs/08-licenses.md`、`docs/09-known-limitations.md` 和
+  GitHub Issue 模板。
+- 新增测试专用 `tlmm:test_crop`（仅 GameTest 注册），证明未出现过的 `CropBlock`
+  也能用同一套通用动作收获和补种，不需要新工具或新 Java Task。
+- `M4CropGameTests` 与 `M4PerformanceGameTests` 加入 GameTest 入口。
+
+验证结果：
+
+- `:core:test :mcp:test` 通过；新增配置迁移、`[limits]`/`[actions]` 解析、并发/频率/
+  认证失败限流测试。
+- `:fabric:runGameTestServer` → `All 49 required tests passed`。12 名同伴探针（8 待命 +
+  4 由通用 `companion_move` 驱动，两波共 8 次移动）多次运行：平均 MSPT 约 `0.29–0.46`，
+  单次最大约 `1.40–7.32`，均低于 `50/250` 预算；最近一次 `heap=411/8092MB`、
+  `threads=33`、`events=30`（同批次其他测试会让 `server_companions=13`）。
+- `:fabric:runClientGametest '-Ptlmm.graphicsBackend=vulkan'` 通过；截图
+  `0000_m4-companion-render.png`、`0001_m4-companion-screen.png` 已人工检查，模型、
+  名字、状态行和 240 高阶界面均可见且未被裁切。
+- `:fabric:verifyTranslations` → `Translation keys match: 64 keys`。
+
+24 小时浸泡尚未在本机执行。发布操作者必须在目标专用服运行
+`.\scripts\soak.ps1 -Minutes 1440 -IntervalSeconds 60` 并保存 CSV；短时验证不能替代该门禁。
+首次客户端启动若出现 `0xC0000005`，删除客户端缓存后重试；本机第二次运行已稳定通过。
+
 ## 恢复工作
 
 重启后先读取本文件。Windows 下从仓库根目录执行：
@@ -296,10 +339,9 @@ git log -3 --oneline --decorate
 即使带 Vulkan 仍崩溃时，先删除 `run/clientGametest/options.txt` 和截图缓存；陈旧
 选项会导致同样的原生访问冲突。
 
-下一步是 M4：客户端模型与动画、界面视觉整理、中英文文本、MCP 连接引导、配置校验与
-迁移、性能与长稳测试、许可证清单与发布说明。M4 验收还要求真实专用服 + CLI 的完整
-Skill E2E 与新作物实机验证。服务端配置位于 `config/touhou-little-maid-mini-server.toml`，
-示例见 `config-examples/`。
+M4 实现、短时 GameTest、客户端截图、双语校验和发布文档已完成。剩余发布门禁是操作者
+在目标专用服执行 24 小时 `scripts/soak.ps1`，并保留 CSV 作为证据。服务端配置位于
+`config/touhou-little-maid-mini-server.toml`，示例见 `config-examples/`。
 
 macOS 旧环境（已不再使用，仅存档）：
 
@@ -325,7 +367,7 @@ run/clientGametest/logs/debug.log
 
 ## 注意事项
 
-- MCP 开发端点默认关闭。Fabric Loom 的 `runServer` 只通过开发 VM 参数启用。
+- MCP 端点由配置 `enabled` 和是否存在可用 Token 决定；`runServer` 不再强制环境 Token。
 - 本地 E2E 使用临时测试 Token；不要把实际 Token 写进仓库或日志。
 - `run/`、`runs/`、`.gradle/` 和构建产物均被 Git 忽略。
 - 重启前应正常停止 Fabric server 和 Client GameTest，避免世界锁或缓存锁残留。

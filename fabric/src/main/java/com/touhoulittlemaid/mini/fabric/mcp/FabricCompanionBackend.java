@@ -1093,7 +1093,10 @@ public final class FabricCompanionBackend implements CompanionTools.CompanionBac
                     "Cursor is older than the retained window; call companion_state first");
         }
 
-        int timeout = Math.max(0, Math.min(timeoutSeconds, 120));
+        int requestedTimeout = timeoutSeconds > 0
+                ? timeoutSeconds
+                : CompanionConfigs.current().limits().defaultEventWaitSeconds();
+        int timeout = Math.max(0, Math.min(requestedTimeout, 120));
         // A GameTest or any caller already on the server thread must not park it.
         if (server.isSameThread()) {
             timeout = 0;

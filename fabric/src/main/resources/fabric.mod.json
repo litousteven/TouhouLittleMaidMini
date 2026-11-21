@@ -20,7 +20,9 @@
       "com.touhoulittlemaid.mini.fabric.gametest.M3InventoryGameTests",
       "com.touhoulittlemaid.mini.fabric.gametest.M3MoveInteractGameTests",
       "com.touhoulittlemaid.mini.fabric.gametest.M3PickupContainerGameTests",
-      "com.touhoulittlemaid.mini.fabric.gametest.M3DisconnectGameTests"
+      "com.touhoulittlemaid.mini.fabric.gametest.M3DisconnectGameTests",
+      "com.touhoulittlemaid.mini.fabric.gametest.M4CropGameTests",
+      "com.touhoulittlemaid.mini.fabric.gametest.M4PerformanceGameTests"
     ],
     "fabric-client-gametest": [
       "com.touhoulittlemaid.mini.fabric.gametest.CompanionClientGameTests"

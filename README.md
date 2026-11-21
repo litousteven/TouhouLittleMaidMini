@@ -18,19 +18,43 @@ NeoForge 保留为 Fabric 行为边界稳定后的后续适配，不阻塞首个
 外部 Codex、Claude Code 或其他 MCP 客户端负责推理和长期记忆；模组负责身体、
 可组合动作、本地安全行为、持久化、权限和审计。
 
-当前状态：**M0、M1、M2、M3 已完成；下一步 M4（Fabric 26.3）**。M3 已落地上下文分类与
-过滤、背包动作、移动/交互与掉落物拾取、容器内容、日程、事件长轮询、按同伴 Token 及其
-持久化、游戏内授权、断线降级和 Skill 示例（[记录](docs/validation/M3.md)）。
+## 当前状态
 
-- M0 技术验证通过，结论 Go（[记录](docs/validation/M0.md)）。
-- M1 同伴实体、命令、背包、六格装备、饥饿与进食、守卫与安全反射、右键管理界面、
-  服务端配置和客户端同步通过 26 个 GameTest 与真实客户端截图
+**`0.1.0-beta` 发布候选（Fabric 26.3）**。M0 至 M3 已完成，M4 已落地客户端模型与
+动画、紧凑管理界面、中英文文本、MCP 连接引导与复制、配置版本与迁移、MCP 并发/频率
+限制、健康诊断、性能与浸泡脚本、许可证清单和发布文档。
+
+- M0 技术验证：Go（[记录](docs/validation/M0.md)）。
+- M1 同伴实体、命令、背包、装备、饥饿、守卫与安全反射、右键管理界面
   （[记录](docs/validation/M1.md)）。
-- M2 MCP 垂直切片通过：10 工具契约、认证、作用域、审计、幂等、事件与作物收获
+- M2 MCP 垂直切片：10 工具契约、认证、作用域、审计、幂等、事件
   （[记录](docs/validation/M2.md)）。
+- M3 通用能力与安全：上下文、背包、移动/交互、日程、长轮询、按同伴 Token、
+  游戏内授权、断线降级、Skill 示例（[记录](docs/validation/M3.md)）。
+- M4 发布准备：客户端模型/动画/状态、界面与双语、配置迁移、MCP 限制、诊断、长稳脚本、
+  许可证与 Issue 模板（[记录](docs/validation/M4.md)）。
 
-过程记录见 [M0_PROGRESS.md](M0_PROGRESS.md)，开发连接步骤见
-[docs/mcp-development-setup.md](docs/mcp-development-setup.md)。
+24 小时浸泡是发布操作者门禁：使用 [`scripts/soak.ps1`](scripts/soak.ps1) 在目标专用服
+执行并保存 CSV。仓库内的短时验证不能替代该运行。
+
+## 快速开始（30 分钟）
+
+```powershell
+$env:JAVA_HOME="$env:USERPROFILE\.jdks\jdk-25.0.5.1+2"
+$env:PATH="$env:JAVA_HOME\bin;$env:PATH"
+$env:TLMM_MCP_TOKEN = -join ((48..57) + (97..122) | Get-Random -Count 32 | ForEach-Object { [char]$_ })
+
+.\gradlew.bat build
+.\gradlew.bat :fabric:runClient '-Ptlmm.graphicsBackend=vulkan'
+```
+
+新建世界后执行 `/tlmm summon`，然后在另一个终端执行：
+
+```powershell
+.\scripts\e2e-mcp.ps1 -Token $env:TLMM_MCP_TOKEN
+```
+
+完整安装、Token、故障提示和专用服说明见 [安装与首次连接](docs/07-installation.md)。
 
 ## 文档
 
@@ -41,7 +65,9 @@ NeoForge 保留为 Fabric 行为边界稳定后的后续适配，不阻塞首个
 - [MCP 工具与事件契约](docs/04-mcp-contract.md)
 - [Skill 与模组适配模型](docs/05-skill-and-extension-model.md)
 - [Minecraft 版本升级 Runbook](docs/06-version-upgrade-playbook.md)
-- [参考仓库与借鉴边界](docs/01-technical-design.md#0-参考仓库与借鉴边界)
+- [安装与首次连接](docs/07-installation.md)
+- [许可证与资产清单](docs/08-licenses.md)
+- [已知限制](docs/09-known-limitations.md)
 - [Codex 项目级 MCP 配置](.codex/config.toml)
 - [服务端配置示例](config-examples/touhou-little-maid-mini-server.toml)
 - [调试环境变量示例](config-examples/mcp-token.env.example)
@@ -75,3 +101,7 @@ NeoForge 保留为 Fabric 行为边界稳定后的后续适配，不阻塞首个
 5. Agent 断开后，同伴停止外部操作，转为本地安全待命。
 6. 权威、不可逆或可能破坏他人财产的动作必须由游戏内真人确认。
 
+## 许可证
+
+项目代码使用 MIT。第三方组件和资产清单见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)
+和 [许可证与资产清单](docs/08-licenses.md)。

@@ -45,8 +45,11 @@ public final class CompanionMenu extends AbstractContainerMenu {
     public static final int DATA_BACKPACK_USED = 6;
     public static final int DATA_MCP_CONNECTED = 7;
     public static final int DATA_EQUIPMENT_USED = 8;
+    public static final int DATA_SCHEDULE = 9;
+    public static final int DATA_MCP_PORT = 10;
+    public static final int DATA_MCP_HOST = 11;
 
-    private static final int DATA_COUNT = 9;
+    private static final int DATA_COUNT = 12;
 
     private final SimpleContainerData data = new SimpleContainerData(DATA_COUNT);
     @Nullable
@@ -70,13 +73,13 @@ public final class CompanionMenu extends AbstractContainerMenu {
                 : new SimpleContainer(CompanionInventoryLayout.EQUIPMENT_SLOTS);
 
         for (int slot = 0; slot < CompanionInventoryLayout.BACKPACK_SLOTS; slot++) {
-            addSlot(new Slot(backpack, slot, 8 + slot * 18, 20));
+            addSlot(new Slot(backpack, slot, 8 + slot * 18, 18));
         }
         for (int slot = 0; slot < CompanionInventoryLayout.EQUIPMENT_SLOTS; slot++) {
             EquipmentSlot equipmentSlot = CompanionEntity.equipmentSlotAt(slot);
-            addSlot(new EquipmentMenuSlot(equipment, slot, 8 + slot * 18, 44, equipmentSlot));
+            addSlot(new EquipmentMenuSlot(equipment, slot, 8 + slot * 18, 40, equipmentSlot));
         }
-        addStandardInventorySlots(playerInventory, 8, 94);
+        addStandardInventorySlots(playerInventory, 8, 106);
 
         refreshData();
         addDataSlots(data);
@@ -110,6 +113,14 @@ public final class CompanionMenu extends AbstractContainerMenu {
         data.set(DATA_BACKPACK_USED, companion.backpackUsedSlots());
         data.set(DATA_MCP_CONNECTED, companion.isMcpConnected() ? 1 : 0);
         data.set(DATA_EQUIPMENT_USED, companion.equipmentUsedSlots());
+        data.set(DATA_SCHEDULE, companion.schedule().ordinal());
+        var serverConfig = com.touhoulittlemaid.mini.fabric.config.CompanionConfigs.current();
+        data.set(DATA_MCP_PORT, serverConfig.mcpPort());
+        data.set(DATA_MCP_HOST, switch (serverConfig.mcpHost()) {
+            case "localhost" -> 1;
+            case "::1" -> 2;
+            default -> 0;
+        });
     }
 
     @Override

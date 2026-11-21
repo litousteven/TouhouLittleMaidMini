@@ -1,6 +1,7 @@
 package com.touhoulittlemaid.mini.mcp;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -60,6 +61,16 @@ class McpServerTest {
         assertEquals("companion_list", first.get("name").getAsString());
         assertTrue(first.getAsJsonObject("inputSchema").has("properties"));
         assertTrue(first.getAsJsonObject("annotations").get("readOnlyHint").getAsBoolean());
+    }
+
+    @Test
+    void disabledActionFamilyRemovesItsTools() {
+        ToolRegistry registry = CompanionTools.registry(new StubBackend())
+                .filter(spec -> TokenScope.actionOf(spec.name())
+                        != com.touhoulittlemaid.mini.core.ActionKind.MOVE);
+        assertTrue(registry.spec("companion_move").isEmpty());
+        assertTrue(registry.spec("companion_set_behavior").isEmpty());
+        assertTrue(registry.spec("companion_list").isPresent());
     }
 
     @Test
@@ -267,6 +278,123 @@ class McpServerTest {
     }
 
     @Test
+    void pingExposesInjectedServerHealthSnapshot() throws Exception {
+        server = new McpServer(
+                new McpServerConfig(McpServerConfig.LOOPBACK, 0, TOKEN),
+                CompanionTools.registry(new StubBackend()),
+                TokenAuthenticator.staticToken(TOKEN, TokenScope.FULL),
+                event -> { },
+                () -> new com.touhoulittlemaid.mini.core.ServerMetrics(
+                        3, 4.5D, 9.0D, 128, 1024, 42, 17, 1, true));
+        server.start();
+
+        JsonObject response = call(endpoint(), request(90, "ping", new JsonObject()));
+        JsonObject result = response.getAsJsonObject("result");
+        assertEquals(3, result.get("companion_count").getAsInt());
+        assertEquals(4.5D, result.get("mspt_average").getAsDouble());
+        assertEquals(9.0D, result.get("mspt_max").getAsDouble());
+        assertEquals(42, result.get("thread_count").getAsInt());
+        assertEquals(17, result.get("retained_events").getAsInt());
+        assertTrue(result.get("mcp_connected").getAsBoolean());
+    }
+
+    @Test
+    void perTokenRateLimitReturnsRateLimitedResult() throws Exception {
+        server = new McpServer(
+                new McpServerConfig(McpServerConfig.LOOPBACK, 0, TOKEN, 4, 1, 10, 90, "test"),
+                CompanionTools.registry(new StubBackend()));
+        server.start();
+
+        JsonObject first = call(endpoint(), toolCall(70, "companion_list", new JsonObject()));
+        assertFalse(first.getAsJsonObject("result").get("isError").getAsBoolean());
+
+        JsonObject second = call(endpoint(), toolCall(71, "companion_list", new JsonObject()));
+        String text = second.getAsJsonObject("result").getAsJsonArray("content")
+                .get(0).getAsJsonObject().get("text").getAsString();
+        assertTrue(text.contains("rate_limited"), text);
+    }
+
+    @Test
+    void concurrentLimitRejectsSecondCallWhileFirstIsWaiting() throws Exception {
+        StubBackend backend = new StubBackend();
+        backend.waitStarted = new java.util.concurrent.CountDownLatch(1);
+        backend.releaseWait = new java.util.concurrent.CountDownLatch(1);
+        server = new McpServer(
+                new McpServerConfig(McpServerConfig.LOOPBACK, 0, TOKEN, 1, 100, 10, 90, "test"),
+                CompanionTools.registry(backend));
+        server.start();
+
+        JsonObject arguments = new JsonObject();
+        arguments.addProperty("companion_id", COMPANION.toString());
+        arguments.addProperty("after_seq", 0);
+        arguments.addProperty("timeout_seconds", 0);
+        JsonObject waiting = toolCall(72, "companion_wait_events", arguments);
+
+        var first = java.util.concurrent.CompletableFuture.supplyAsync(() -> {
+            try {
+                return call(endpoint(), waiting);
+            } catch (Exception exception) {
+                throw new RuntimeException(exception);
+            }
+        });
+        assertTrue(backend.waitStarted.await(5, java.util.concurrent.TimeUnit.SECONDS),
+                "the first call must be in flight");
+
+        JsonObject second = call(endpoint(), toolCall(73, "companion_list", new JsonObject()));
+        String text = second.getAsJsonObject("result").getAsJsonArray("content")
+                .get(0).getAsJsonObject().get("text").getAsString();
+        assertTrue(text.contains("rate_limited"), text);
+
+        backend.releaseWait.countDown();
+        first.get(10, java.util.concurrent.TimeUnit.SECONDS);
+    }
+
+    @Test
+    void rejectsANonLoopbackBrowserOrigin() throws Exception {
+        server = start();
+        HttpRequest request = HttpRequest.newBuilder(endpoint())
+                .header("Authorization", "Bearer " + TOKEN)
+                .header("Origin", "http://evil.example")
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString(
+                        request(85, "ping", new JsonObject()).toString(),
+                        StandardCharsets.UTF_8))
+                .build();
+        HttpResponse<String> response = http.send(request, HttpResponse.BodyHandlers.ofString());
+        assertEquals(403, response.statusCode());
+    }
+
+    @Test
+    void acceptsALoopbackBrowserOrigin() throws Exception {
+        server = start();
+        HttpRequest request = HttpRequest.newBuilder(endpoint())
+                .header("Authorization", "Bearer " + TOKEN)
+                .header("Origin", "http://127.0.0.1:" + server.port())
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString(
+                        request(86, "ping", new JsonObject()).toString(),
+                        StandardCharsets.UTF_8))
+                .build();
+        HttpResponse<String> response = http.send(request, HttpResponse.BodyHandlers.ofString());
+        assertEquals(200, response.statusCode(), response.body());
+    }
+
+    @Test
+    void repeatedFailedAuthenticationIsThrottled() throws Exception {
+        server = new McpServer(
+                new McpServerConfig(McpServerConfig.LOOPBACK, 0, TOKEN, 4, 60, 2, 90, "test"),
+                CompanionTools.registry(new StubBackend()));
+        server.start();
+
+        for (int attempt = 0; attempt < 2; attempt++) {
+            assertEquals(401, sendWithToken("wrong-token",
+                    request(80 + attempt, "ping", new JsonObject())).statusCode());
+        }
+        assertEquals(429, sendWithToken("wrong-token",
+                request(82, "ping", new JsonObject())).statusCode());
+    }
+
+    @Test
     void closeReleasesTheListeningPort() throws Exception {
         server = start();
         int port = server.port();
@@ -298,6 +426,15 @@ class McpServerTest {
         return URI.create("http://127.0.0.1:" + server.port() + McpServer.PATH);
     }
 
+    private HttpResponse<String> sendWithToken(String token, JsonObject body) throws Exception {
+        HttpRequest request = HttpRequest.newBuilder(endpoint())
+                .header("Authorization", "Bearer " + token)
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString(body.toString(), StandardCharsets.UTF_8))
+                .build();
+        return http.send(request, HttpResponse.BodyHandlers.ofString());
+    }
+
     private JsonObject call(URI endpoint, JsonObject body) throws Exception {
         HttpRequest request = HttpRequest.newBuilder(endpoint)
                 .header("Authorization", "Bearer " + TOKEN)
@@ -323,6 +460,8 @@ class McpServerTest {
 
         private final java.util.concurrent.atomic.AtomicInteger waitCalls =
                 new java.util.concurrent.atomic.AtomicInteger();
+        private volatile java.util.concurrent.CountDownLatch waitStarted;
+        private volatile java.util.concurrent.CountDownLatch releaseWait;
 
         @Override
         public List<CompanionSnapshot> listCompanions() {
@@ -378,6 +517,18 @@ class McpServerTest {
         public ToolResult waitEvents(UUID companionId, long afterSequence,
                 int timeoutSeconds, int maxEvents) {
             waitCalls.incrementAndGet();
+            java.util.concurrent.CountDownLatch started = waitStarted;
+            java.util.concurrent.CountDownLatch release = releaseWait;
+            if (started != null) {
+                started.countDown();
+            }
+            if (release != null) {
+                try {
+                    release.await(10, java.util.concurrent.TimeUnit.SECONDS);
+                } catch (InterruptedException exception) {
+                    Thread.currentThread().interrupt();
+                }
+            }
             return ToolResult.ok("events",
                     "{\"events\":[],\"next_seq\":" + afterSequence + ",\"timed_out\":true}");
         }

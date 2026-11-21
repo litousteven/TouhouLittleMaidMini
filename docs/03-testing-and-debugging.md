@@ -65,22 +65,32 @@ run/soak
 开发配置默认：
 
 ```toml
+config_version = 1
 enabled = true
 host = "127.0.0.1"
 port = 8765
-require_token = true
 disconnect_grace_seconds = 60
 continue_operation_after_disconnect = false
 safe_mode_after_disconnect = "stay"
+
+[limits]
+max_concurrent_calls = 4
+max_calls_per_minute_per_token = 60
+max_failed_auth_per_minute_per_ip = 10
+default_tool_timeout_seconds = 90
+default_event_wait_seconds = 50
 ```
+
+Bearer Token 始终是必需的。Token 来自游戏内 `/tlmm mcp token create <days>`，或开发环境
+的 `TLMM_MCP_TOKEN`。没有可用 Token 时端点不会启动，并输出明确日志。
 
 启动游戏后在游戏内创建调试 Token：
 
 ```text
-/tlmm mcp token create --companion debug_maid --days 1
+/tlmm mcp token create 1
 ```
 
-Token 明文只显示一次。示例环境变量：
+Token 明文只显示一次。也可以使用示例环境变量：
 
 ```bash
 export TLMM_MCP_TOKEN="一次性显示的实际Token"
@@ -251,6 +261,59 @@ GameTest 必须有固定种子、固定场地和明确时限。失败日志应�
 - 主线程单次最长阻塞。
 - 实体丢失、动作卡死和重复事件数量。
 
+MCP `ping` 已返回 `mspt_average`、`mspt_max`、`heap_used_mb`、`thread_count` 和事件
+序列，浸泡脚本不需要额外工具：
+
+```powershell
+# 短时冒烟
+.\scripts\soak.ps1 -Minutes 5 -IntervalSeconds 30 -Token $env:TLMM_MCP_TOKEN
+
+# 24 小时发布门禁
+.\scripts\soak.ps1 -Minutes 1440 -IntervalSeconds 60 -Token $env:TLMM_MCP_TOKEN `
+  -Output run/soak-24h.csv
+```
+
+脚本判定规则：
+
+- 采样失败率超过 `-MaxFailurePercent`（默认 `1%`）判失败；连续失败达到
+  `-MaxConsecutiveFailures`（默认 `5` 次）时立即中止并写出部分 CSV，避免端点已死还
+  空跑 24 小时。
+- 内存与线程同时看两个口径：首末样本差和「最早 20% 与最晚 20% 样本均值」的趋势差。
+  24 小时里首末两点会被 GC 抖动掩盖，趋势口径才是持续增长的证据。堆趋势超过
+  `-MaxHeapTrendMb`（默认 `192 MB`）或线程趋势超过 `-MaxThreadTrend`（默认 `8`）判失败。
+- 单 tick 超过 `250 ms` 判失败。
+
+短时冒烟可以用更严的窗口验证脚本本身：
+
+```powershell
+.\scripts\soak.ps1 -Minutes 2 -IntervalSeconds 10 -MaxConsecutiveFailures 2
+```
+
+CSV 和终端摘要都不包含 Token；不要把 Token 放进输出路径或提交 CSV 之外的本机路径。
+
+游戏内快速检查：
+
+```text
+/tlmm diag
+```
+
+输出同伴数、平均/最大 MSPT、堆、线程、MCP 端点和保留事件数。`ping` 和 `/tlmm diag`
+使用同一份 `ServerDiagnostics` 快照。
+
+M4 发布前还要执行：
+
+```powershell
+.\gradlew.bat :core:test :mcp:test
+.\gradlew.bat :fabric:runGameTestServer
+.\gradlew.bat :fabric:runClientGametest '-Ptlmm.graphicsBackend=vulkan'
+.\gradlew.bat :fabric:verifyTranslations
+.\gradlew.bat build
+```
+
+M4 GameTest 包含一个未在本仓库出现过的 `CropBlock` 收获/补种场景，以及 12 名同伴的
+MSPT 预算探针。客户端 GameTest 产出 `m4-companion-render.png` 和
+`m4-companion-screen.png`。
+
 ## 7. 安全测试矩阵
 
 | 项 | 期望 |
@@ -262,7 +325,7 @@ GameTest 必须有固定种子、固定场地和明确时限。失败日志应�
 | Agent 请求他人容器 | 进入真人授权或拒绝 |
 | Agent 尝试任意命令 | 无此工具 |
 | 非循环地址但未显式开启 | 不监听 |
-| 错 Origin | 拒绝 |
+| 错 Origin | 拒绝（非循环 `Origin` 返回 `403`；CLI 不带 Origin 时放行） |
 | Agent 在授权界面自己批准 | 无入口 |
 | 日志与审计 | 不含 Token 和私有正文 |
 

@@ -22,7 +22,6 @@ import net.minecraft.world.entity.player.Player;
 public final class CompanionPermissions {
 
     private static final PermissionBroker BROKER = new PermissionBroker();
-    private static final long TTL_MILLIS = 120_000L;
 
     private CompanionPermissions() {
     }
@@ -35,8 +34,10 @@ public final class CompanionPermissions {
                     PermissionBroker.Decision.DENIED, 0L);
         }
 
+        long ttlMillis = com.touhoulittlemaid.mini.fabric.config.CompanionConfigs.current()
+                .safety().ownerConfirmationTimeoutSeconds() * 1_000L;
         PermissionBroker.Ticket ticket = BROKER.authorize(
-                companion.getUUID().toString(), action, TTL_MILLIS);
+                companion.getUUID().toString(), action, ttlMillis);
         if (ticket.decision() == PermissionBroker.Decision.PENDING
                 && owner instanceof ServerPlayer player) {
             player.sendSystemMessage(prompt(companion, ticket));
