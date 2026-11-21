@@ -15,6 +15,7 @@ runs/
 
 # Local assistant tooling state
 .commandcode/
+.workbuddy/
 
 # Local secrets and generated MCP credentials
 *.token
