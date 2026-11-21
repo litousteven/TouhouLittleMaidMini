@@ -2,6 +2,7 @@ package com.touhoulittlemaid.mini.fabric.entity;
 
 import com.touhoulittlemaid.mini.core.CompanionHunger;
 import com.touhoulittlemaid.mini.core.CompanionInventoryLayout;
+import com.touhoulittlemaid.mini.core.CompanionSchedule;
 import com.touhoulittlemaid.mini.core.CompanionServerConfig;
 import com.touhoulittlemaid.mini.core.CompanionSnapshot;
 import com.touhoulittlemaid.mini.core.LocalBehavior;
@@ -76,6 +77,8 @@ public final class CompanionEntity extends TamableAnimal {
             SynchedEntityData.defineId(CompanionEntity.class, EntityDataSerializers.INT);
     private static final EntityDataAccessor<Boolean> DATA_MCP_CONNECTED =
             SynchedEntityData.defineId(CompanionEntity.class, EntityDataSerializers.BOOLEAN);
+    private static final EntityDataAccessor<String> DATA_SCHEDULE =
+            SynchedEntityData.defineId(CompanionEntity.class, EntityDataSerializers.STRING);
 
     private static final String DEFAULT_NAME = "Companion";
     private static final String BACKPACK_KEY_PREFIX = "companion_backpack_";
@@ -117,6 +120,7 @@ public final class CompanionEntity extends TamableAnimal {
         builder.define(DATA_RADIUS, DEFAULT_RADIUS);
         builder.define(DATA_BACKPACK_USED, 0);
         builder.define(DATA_MCP_CONNECTED, false);
+        builder.define(DATA_SCHEDULE, CompanionSchedule.ALL.id());
     }
 
     @Override
@@ -135,6 +139,28 @@ public final class CompanionEntity extends TamableAnimal {
 
     public LocalBehavior behavior() {
         return LocalBehavior.fromId(entityData.get(DATA_BEHAVIOR));
+    }
+
+    public CompanionSchedule schedule() {
+        return CompanionSchedule.fromId(entityData.get(DATA_SCHEDULE));
+    }
+
+    public void setSchedule(CompanionSchedule schedule) {
+        entityData.set(DATA_SCHEDULE, schedule.id());
+        if (schedule != CompanionSchedule.ALL && !isWorkTime()) {
+            getNavigation().stop();
+            setTarget(null);
+        }
+    }
+
+    /**
+     * Whether the local behaviour may act right now.
+     *
+     * <p>The schedule gates only the body's own initiative. An explicit agent request
+     * goes through the MCP backend and is never filtered here.
+     */
+    public boolean isWorkTime() {
+        return schedule().isActive(level().isBrightOutside());
     }
 
     public void setBehavior(LocalBehavior behavior) {
@@ -258,6 +284,7 @@ public final class CompanionEntity extends TamableAnimal {
                 reference == null ? Optional.empty() : Optional.of(reference.getUUID()),
                 companionName(),
                 behavior(),
+                schedule(),
                 hasHome());
     }
 
@@ -297,7 +324,7 @@ public final class CompanionEntity extends TamableAnimal {
     }
 
     private boolean isValidGuardTarget(LivingEntity target, ServerLevel level) {
-        if (behavior() != LocalBehavior.GUARD || isSafetyStopped()) {
+        if (behavior() != LocalBehavior.GUARD || isSafetyStopped() || !isWorkTime()) {
             return false;
         }
         BlockPos homePos = homeBlockPos().orElse(null);
@@ -461,6 +488,7 @@ public final class CompanionEntity extends TamableAnimal {
         output.putString("companion_name", companionName());
         output.putInt("companion_hunger", hunger.level());
         output.putInt("companion_radius", radius);
+        output.putString("companion_schedule", schedule().id());
         home.ifPresent(position -> {
             output.putString("companion_home_dimension", position.dimension().identifier().toString());
             output.store("companion_home_pos", BlockPos.CODEC, position.pos());
@@ -496,6 +524,13 @@ public final class CompanionEntity extends TamableAnimal {
         hunger.setLevel(input.getIntOr("companion_hunger", CompanionHunger.MAX_LEVEL));
         entityData.set(DATA_HUNGER, hunger.level());
         setWorkRadius(input.getIntOr("companion_radius", DEFAULT_RADIUS));
+        input.getString("companion_schedule").ifPresent(id -> {
+            try {
+                setSchedule(CompanionSchedule.fromId(id));
+            } catch (IllegalArgumentException ignored) {
+                setSchedule(CompanionSchedule.ALL);
+            }
+        });
 
         Optional<BlockPos> storedHome = input.read("companion_home_pos", BlockPos.CODEC);
         Optional<String> storedDimension = input.getString("companion_home_dimension");

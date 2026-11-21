@@ -145,10 +145,13 @@ public final class FabricCompanionBackend implements CompanionTools.CompanionBac
                 return ToolResult.rejected("busy",
                         "companion is already moving; pass replace=true to interrupt");
             }
+            if (request.targetKind() == InteractTargetKind.ENTITY) {
+                return interactWithEntity(companionId, companion, request);
+            }
             if (request.targetKind() != InteractTargetKind.BLOCK) {
                 return ToolResult.rejected("unsupported_interaction",
-                        "Only block interactions are exposed; " + request.targetKind().id()
-                                + " interactions need a player context");
+                        "Air interactions need a player context in this Minecraft version; "
+                                + "only block and item-entity interactions are exposed");
             }
             if (request.button() != InteractButton.RIGHT) {
                 return ToolResult.rejected("unsupported_interaction",
@@ -156,6 +159,65 @@ public final class FabricCompanionBackend implements CompanionTools.CompanionBac
             }
             return interactWithBlock(companionId, companion, request);
         }));
+    }
+
+    /**
+     * Picks up a dropped item without pretending to be a player.
+     *
+     * <p>{@code ItemEntity} has no interaction requirement; the companion inserts the
+     * stack into its backpack with the same capacity rules as {@code companion_inventory}.
+     * Other entities still need a {@code Player} for {@code interact}, so they stay
+     * explicitly unsupported rather than silently doing nothing.
+     */
+    private ToolResult interactWithEntity(UUID companionId, CompanionEntity companion,
+            InteractRequest request) {
+        if (!(companion.level() instanceof ServerLevel serverLevel)) {
+            return ToolResult.rejected("unsupported_interaction",
+                    "Entity interaction requires a server level");
+        }
+        var entity = serverLevel.getEntityInAnyDimension(java.util.UUID.fromString(
+                request.entityId()));
+        if (entity == null) {
+            return ToolResult.rejected("not_found",
+                    "No loaded entity with id " + request.entityId());
+        }
+        if (!(entity instanceof net.minecraft.world.entity.item.ItemEntity itemEntity)) {
+            return ToolResult.rejected("unsupported_interaction",
+                    "Only dropped item entities can be picked up without a player context");
+        }
+        if (itemEntity.hasPickUpDelay()) {
+            return ToolResult.rejected("not_ready", "item still has a pickup delay");
+        }
+        ItemStack stack = itemEntity.getItem();
+        if (stack.isEmpty()) {
+            return ToolResult.rejected("not_found", "item entity is empty");
+        }
+        int space = backpackSpace(companion.backpack(), stack);
+        if (space <= 0) {
+            CompanionRuntimeState.publish(companionId, "inventory_full",
+                    "{\"action\":\"pickup\"}");
+            return ToolResult.rejected("inventory_full", "backpack has no room for "
+                    + itemId(stack));
+        }
+
+        int moved = Math.min(space, stack.getCount());
+        ItemStack taken = stack.copyWithCount(moved);
+        ItemStack leftover = stack.copy();
+        leftover.shrink(moved);
+        insertIntoBackpack(companion.backpack(), taken);
+        companion.backpack().setChanged();
+        if (leftover.isEmpty()) {
+            itemEntity.discard();
+        } else {
+            itemEntity.setItem(leftover);
+        }
+
+        String stackId = itemId(stack);
+        events.publish(companionId.toString(), "operation_completed",
+                "{\"action\":\"pickup\",\"item\":\"" + escape(stackId)
+                        + "\",\"count\":" + moved + '}');
+        return ToolResult.ok("picked_up", "{\"item\":\"" + escape(stackId)
+                + "\",\"count\":" + moved + '}');
     }
 
     private ToolResult interactWithBlock(UUID companionId, CompanionEntity companion,
@@ -244,6 +306,8 @@ public final class FabricCompanionBackend implements CompanionTools.CompanionBac
     private static String selfJson(CompanionEntity companion, int radius) {
         StringBuilder json = new StringBuilder("{\"category\":\"self\"");
         stringField(json, "behavior", companion.behavior().id());
+        stringField(json, "schedule", companion.schedule().id());
+        booleanField(json, "work_time", companion.isWorkTime());
         numberField(json, "health", companion.getHealth());
         numberField(json, "max_health", companion.getMaxHealth());
         intField(json, "hunger", companion.hunger().level());
@@ -476,7 +540,9 @@ public final class FabricCompanionBackend implements CompanionTools.CompanionBac
                     blockPosition(entries, pos);
                     numberField(entries, "distance", Math.sqrt(companion.distanceToSqr(
                             pos.getX() + 0.5D, pos.getY() + 0.5D, pos.getZ() + 0.5D)));
-                    entries.append(",\"contents\":\"not_read\"}");
+                    appendContainerContents(entries,
+                            (net.minecraft.world.Container) level.getBlockEntity(pos));
+                    entries.append('}');
                     matched++;
                 }
             }
@@ -597,6 +663,36 @@ public final class FabricCompanionBackend implements CompanionTools.CompanionBac
                     .append("\":\"").append(escape(value.valueName())).append('"');
         }
         json.append("}}");
+    }
+
+    private static void appendContainerContents(StringBuilder json,
+            net.minecraft.world.Container container) {
+        boolean locked = container instanceof net.minecraft.world.level.block.entity.BaseContainerBlockEntity
+                base && base.isLocked();
+        boolean empty = container.isEmpty();
+        json.append(",\"locked\":").append(locked)
+                .append(",\"empty\":").append(empty)
+                .append(",\"slots\":").append(container.getContainerSize())
+                .append(",\"contents\":[");
+        if (locked) {
+            json.append("]}");
+            return;
+        }
+        boolean first = true;
+        for (int slot = 0; slot < container.getContainerSize(); slot++) {
+            ItemStack stack = container.getItem(slot);
+            if (stack.isEmpty()) {
+                continue;
+            }
+            if (!first) {
+                json.append(',');
+            }
+            first = false;
+            json.append("{\"slot\":").append(slot)
+                    .append(",\"item\":\"").append(escape(itemId(stack)))
+                    .append("\",\"count\":").append(stack.getCount()).append('}');
+        }
+        json.append("]}");
     }
 
     private static String blockId(net.minecraft.world.level.block.state.BlockState state) {
@@ -965,17 +1061,20 @@ public final class FabricCompanionBackend implements CompanionTools.CompanionBac
     }
 
     @Override
-    public ToolResult setBehavior(UUID companionId, LocalBehavior behavior) {
+    public ToolResult setBehavior(UUID companionId, LocalBehavior behavior,
+            Optional<com.touhoulittlemaid.mini.core.CompanionSchedule> schedule) {
         return runOnServer(ignored -> withCompanion(companionId, companion -> {
             CompanionRuntimeState.presence().recordWrite(companionId);
             LocalBehavior previous = companion.behavior();
             companion.setBehavior(behavior);
+            schedule.ifPresent(companion::setSchedule);
             if (previous != behavior) {
                 events.publish(companionId.toString(), "behavior_changed",
                         "{\"previous\":\"" + previous.id() + "\",\"current\":\""
                                 + behavior.id() + "\"}");
             }
-            return ToolResult.ok("behavior_set", behavior.id());
+            return ToolResult.ok("behavior_set", "{\"behavior\":\"" + behavior.id()
+                    + "\",\"schedule\":\"" + companion.schedule().id() + "\"}");
         }));
     }
 

@@ -13,6 +13,9 @@ runs/
 *.log
 .DS_Store
 
+# Local assistant tooling state
+.commandcode/
+
 # Local secrets and generated MCP credentials
 *.token
 *.secret

@@ -26,6 +26,7 @@ class CompanionToolsTest {
     private static final class RecordingBackend implements CompanionTools.CompanionBackend {
         private final AtomicInteger waits = new AtomicInteger();
         private LocalBehavior lastBehavior;
+        private com.touhoulittlemaid.mini.core.CompanionSchedule lastSchedule;
         private com.touhoulittlemaid.mini.core.MoveRequest lastMove;
         private com.touhoulittlemaid.mini.core.InteractRequest lastInteract;
         private UUID lastStop;
@@ -36,7 +37,8 @@ class CompanionToolsTest {
         @Override
         public List<CompanionSnapshot> listCompanions() {
             return List.of(new CompanionSnapshot(COMPANION, Optional.empty(), "Alice",
-                    LocalBehavior.STAY, true));
+                    LocalBehavior.STAY, com.touhoulittlemaid.mini.core.CompanionSchedule.ALL,
+                    true));
         }
 
         @Override
@@ -45,7 +47,8 @@ class CompanionToolsTest {
                 throw new IllegalStateException("Unknown companion: " + companionId);
             }
             return new CompanionSnapshot(companionId, Optional.empty(), "Alice",
-                    LocalBehavior.STAY, true);
+                    LocalBehavior.STAY, com.touhoulittlemaid.mini.core.CompanionSchedule.ALL,
+                    true);
         }
 
         @Override
@@ -77,8 +80,12 @@ class CompanionToolsTest {
         }
 
         @Override
-        public ToolResult setBehavior(UUID companionId, LocalBehavior behavior) {
+        public ToolResult setBehavior(UUID companionId, LocalBehavior behavior,
+                Optional<com.touhoulittlemaid.mini.core.CompanionSchedule> schedule) {
             lastBehavior = behavior;
+            if (schedule.isPresent()) {
+                lastSchedule = schedule.get();
+            }
             return ToolResult.ok("behavior_set", behavior.id());
         }
 
@@ -239,6 +246,32 @@ class CompanionToolsTest {
                 "behavior", "guard"));
 
         assertEquals(LocalBehavior.GUARD, backend.lastBehavior);
+    }
+
+    @Test
+    void behaviorCarriesAnOptionalSchedule() {
+        RecordingBackend backend = new RecordingBackend();
+        registry(backend).invoke("companion_set_behavior", Map.of(
+                "companion_id", COMPANION.toString(),
+                "behavior", "guard",
+                "schedule", "night"));
+
+        assertEquals(LocalBehavior.GUARD, backend.lastBehavior);
+        assertEquals(com.touhoulittlemaid.mini.core.CompanionSchedule.NIGHT,
+                backend.lastSchedule);
+    }
+
+    @Test
+    void invalidScheduleIsRejected() {
+        RecordingBackend backend = new RecordingBackend();
+        ToolResult result = registry(backend).invoke("companion_set_behavior", Map.of(
+                "companion_id", COMPANION.toString(),
+                "behavior", "guard",
+                "schedule", "noon"));
+
+        assertEquals(ToolResult.Status.REJECTED, result.status());
+        assertEquals("invalid_params", result.code());
+        assertEquals(null, backend.lastBehavior);
     }
 
     @Test

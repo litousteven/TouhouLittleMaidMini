@@ -327,13 +327,15 @@ class McpServerTest {
         @Override
         public List<CompanionSnapshot> listCompanions() {
             return List.of(new CompanionSnapshot(COMPANION, Optional.empty(), "Alice",
-                    LocalBehavior.STAY, false));
+                    LocalBehavior.STAY, com.touhoulittlemaid.mini.core.CompanionSchedule.ALL,
+                    false));
         }
 
         @Override
         public CompanionSnapshot state(UUID companionId) {
             return new CompanionSnapshot(companionId, Optional.empty(), "Alice",
-                    LocalBehavior.STAY, false);
+                    LocalBehavior.STAY, com.touhoulittlemaid.mini.core.CompanionSchedule.ALL,
+                    false);
         }
 
         @Override
@@ -362,7 +364,8 @@ class McpServerTest {
         }
 
         @Override
-        public ToolResult setBehavior(UUID companionId, LocalBehavior behavior) {
+        public ToolResult setBehavior(UUID companionId, LocalBehavior behavior,
+                Optional<com.touhoulittlemaid.mini.core.CompanionSchedule> schedule) {
             return ToolResult.ok("behavior_set", behavior.id());
         }
 

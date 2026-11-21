@@ -37,18 +37,21 @@ class CompanionModelTest {
         UUID companion = UUID.randomUUID();
         UUID owner = UUID.randomUUID();
         CompanionSnapshot snapshot = new CompanionSnapshot(
-                companion, Optional.of(owner), "Alice", LocalBehavior.STAY, true);
+                companion, Optional.of(owner), "Alice", LocalBehavior.STAY,
+                CompanionSchedule.ALL, true);
 
         assertTrue(snapshot.hasOwner());
         assertTrue(snapshot.isOwnedBy(owner));
         assertFalse(snapshot.isOwnedBy(UUID.randomUUID()));
         assertTrue(snapshot.homeSet());
+        assertEquals(CompanionSchedule.ALL, snapshot.schedule());
     }
 
     @Test
     void snapshotWithoutOwnerNeverMatches() {
         CompanionSnapshot snapshot = new CompanionSnapshot(
-                UUID.randomUUID(), Optional.empty(), "Stray", LocalBehavior.GUARD, false);
+                UUID.randomUUID(), Optional.empty(), "Stray", LocalBehavior.GUARD,
+                CompanionSchedule.NIGHT, false);
 
         assertFalse(snapshot.hasOwner());
         assertFalse(snapshot.isOwnedBy(UUID.randomUUID()));
@@ -58,10 +61,15 @@ class CompanionModelTest {
     @Test
     void snapshotRejectsInvalidInput() {
         assertThrows(IllegalArgumentException.class, () -> new CompanionSnapshot(
-                UUID.randomUUID(), Optional.empty(), "  ", LocalBehavior.STAY, false));
+                UUID.randomUUID(), Optional.empty(), "  ", LocalBehavior.STAY,
+                CompanionSchedule.ALL, false));
         assertThrows(NullPointerException.class, () -> new CompanionSnapshot(
-                null, Optional.empty(), "Alice", LocalBehavior.STAY, false));
+                null, Optional.empty(), "Alice", LocalBehavior.STAY,
+                CompanionSchedule.ALL, false));
         assertThrows(NullPointerException.class, () -> new CompanionSnapshot(
-                UUID.randomUUID(), null, "Alice", LocalBehavior.STAY, false));
+                UUID.randomUUID(), null, "Alice", LocalBehavior.STAY,
+                CompanionSchedule.ALL, false));
+        assertThrows(NullPointerException.class, () -> new CompanionSnapshot(
+                UUID.randomUUID(), Optional.empty(), "Alice", LocalBehavior.STAY, null, false));
     }
 }

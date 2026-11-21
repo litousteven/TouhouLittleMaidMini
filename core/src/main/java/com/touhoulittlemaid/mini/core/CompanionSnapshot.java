@@ -5,13 +5,14 @@ import java.util.Optional;
 import java.util.UUID;
 
 /**
- * Minecraft-free snapshot of a companion's identity and local behaviour.
+ * Minecraft-free snapshot of a companion's identity, local behaviour and schedule.
  */
 public record CompanionSnapshot(
         UUID companionId,
         Optional<UUID> ownerId,
         String name,
         LocalBehavior behavior,
+        CompanionSchedule schedule,
         boolean homeSet) {
 
     public CompanionSnapshot {
@@ -19,6 +20,7 @@ public record CompanionSnapshot(
         Objects.requireNonNull(ownerId, "ownerId");
         Objects.requireNonNull(name, "name");
         Objects.requireNonNull(behavior, "behavior");
+        Objects.requireNonNull(schedule, "schedule");
         if (name.isBlank()) {
             throw new IllegalArgumentException("name must not be blank");
         }

@@ -6,6 +6,7 @@ import com.touhoulittlemaid.mini.fabric.config.CompanionConfigs;
 import com.touhoulittlemaid.mini.fabric.content.FabricContent;
 import com.touhoulittlemaid.mini.fabric.mcp.FabricCompanionBackend;
 import com.touhoulittlemaid.mini.fabric.persistence.M0SavedData;
+import com.touhoulittlemaid.mini.fabric.persistence.TokenSavedData;
 import com.touhoulittlemaid.mini.fabric.runtime.CompanionRuntimeState;
 import com.touhoulittlemaid.mini.mcp.CompanionTokenStore;
 import com.touhoulittlemaid.mini.mcp.CompanionTools;
@@ -49,6 +50,7 @@ public final class TlmmFabric implements ModInitializer {
             int saveVersion = M0SavedData.get(server).value();
             LOGGER.info("[m0] saved-data baseline value={}", saveVersion);
             CompanionConfigs.load();
+            TOKEN_STORE.restore(TokenSavedData.get(server).toPersisted());
             EventBus events = new EventBus();
             Path logDirectory = FabricLoader.getInstance().getGameDir().resolve("logs");
             try {
@@ -65,6 +67,10 @@ public final class TlmmFabric implements ModInitializer {
             CompanionRuntimeState.setMcpConnected(false);
             state.set(state.get().ready());
             startMcp(server);
+        });
+        ServerLifecycleEvents.SERVER_STOPPING.register(server -> {
+            TOKEN_STORE.pruneExpired();
+            TokenSavedData.get(server).replace(TOKEN_STORE.export());
         });
         ServerLifecycleEvents.SERVER_STOPPED.register(server -> {
             stopMcp();
@@ -129,6 +135,11 @@ public final class TlmmFabric implements ModInitializer {
 
     public static CompanionTokenStore tokenStore() {
         return TOKEN_STORE;
+    }
+
+    /** Mirrors the in-memory token digests into world data so a restart keeps them valid. */
+    public static void persistTokens(net.minecraft.server.MinecraftServer server) {
+        TokenSavedData.get(server).replace(TOKEN_STORE.export());
     }
 
     private void stopMcp() {

@@ -18,11 +18,13 @@ public final class BehaviorFollowOwnerGoal extends FollowOwnerGoal {
 
     @Override
     public boolean canUse() {
-        return companion.behavior() == LocalBehavior.FOLLOW && super.canUse();
+        return companion.behavior() == LocalBehavior.FOLLOW
+                && companion.isWorkTime() && super.canUse();
     }
 
     @Override
     public boolean canContinueToUse() {
-        return companion.behavior() == LocalBehavior.FOLLOW && super.canContinueToUse();
+        return companion.behavior() == LocalBehavior.FOLLOW
+                && companion.isWorkTime() && super.canContinueToUse();
     }
 }

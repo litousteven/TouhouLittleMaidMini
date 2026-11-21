@@ -10,7 +10,6 @@ requires_tools:
   - companion_interact
 game_versions:
   - "26.3"
-status: draft
 ---
 
 # Collect items
@@ -19,24 +18,27 @@ status: draft
 
 Bring nearby dropped items into the companion's backpack.
 
-## Current limitation
-
-This build does not expose entity interaction yet: `companion_interact` with
-`target_kind=entity` returns `unsupported_interaction`. Do not pretend an item was
-picked up. Report the limitation and ask for a Java action provider if item collection
-must be automated.
-
-## Procedure when entity interaction becomes available
+## Procedure
 
 1. Use `companion_context` with `category=entities`, `entity_types=[minecraft:item]`
    and a bounded `radius`.
 2. Move to the nearest item with `distance=1`.
 3. Interact with `target_kind=entity`, `entity_id=<uuid>`.
-4. Wait for `operation_completed`, then read the inventory to confirm the item delta.
-5. Stop when the backpack is full; report `inventory_full`.
+4. Read the result:
+   - `picked_up` — confirm the item delta with `companion_context category=inventory`.
+   - `not_ready` — the item still has a pickup delay; wait and retry once.
+   - `inventory_full` — stop and report the free slots.
+   - `unsupported_interaction` — the target was not a dropped item entity.
+5. Repeat until no item entities remain or the action budget is exhausted.
+
+## Limit
+
+Only dropped item entities are supported. Interacting with a living entity (villager,
+animal, another companion) returns `unsupported_interaction`, because vanilla
+`Entity.interact` requires a `Player`. Do not pretend such an interaction happened.
 
 ## Stop conditions
 
-- `unsupported_interaction` — report that the build does not support item pickup.
 - `inventory_full`
 - `unsafe_area`
+- Owner asks to stop.

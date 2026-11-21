@@ -1,6 +1,7 @@
 package com.touhoulittlemaid.mini.mcp;
 
 import com.touhoulittlemaid.mini.core.ActionKind;
+import com.touhoulittlemaid.mini.core.CompanionSchedule;
 import com.touhoulittlemaid.mini.core.CompanionSnapshot;
 import com.touhoulittlemaid.mini.core.ContextCategory;
 import com.touhoulittlemaid.mini.core.ContextQuery;
@@ -67,8 +68,9 @@ public final class CompanionTools {
         /** Read or change the companion inventory. */
         ToolResult inventory(UUID companionId, InventoryRequest request);
 
-        /** Change the local behaviour. */
-        ToolResult setBehavior(UUID companionId, LocalBehavior behavior);
+        /** Change the local behaviour and, when given, its work schedule. */
+        ToolResult setBehavior(UUID companionId, LocalBehavior behavior,
+                Optional<CompanionSchedule> schedule);
 
         /** Stop the current operation. */
         ToolResult stop(UUID companionId);
@@ -216,8 +218,9 @@ public final class CompanionTools {
         registry.register(new ToolSpec(
                         "companion_interact",
                         "Interact",
-                        "Performs one player-like click on a block, entity or air position. "
-                                + "Crops are harvested when mature and replanted from carried seeds.",
+                        "Performs one player-like click on a block or a dropped item entity. "
+                                + "Crops are harvested when mature and replanted from carried "
+                                + "seeds; dropped items are inserted into the backpack.",
                         ordered(
                                 "companion_id", ToolParameter.requiredString("Companion UUID"),
                                 "target_kind", ToolParameter.optionalString("block, entity or air"),
@@ -394,10 +397,12 @@ public final class CompanionTools {
         registry.register(new ToolSpec(
                         "companion_set_behavior",
                         "Set local behaviour",
-                        "Switches between the stay, follow and guard local behaviours.",
+                        "Switches between the stay, follow and guard local behaviours and can "
+                                + "limit the local work schedule to day or night.",
                         ordered(
                                 "companion_id", ToolParameter.requiredString("Companion UUID"),
-                                "behavior", ToolParameter.requiredString("stay, follow or guard")),
+                                "behavior", ToolParameter.requiredString("stay, follow or guard"),
+                                "schedule", ToolParameter.optionalString("all, day or night")),
                         false, false, true),
                 arguments -> {
                     Optional<UUID> id = companionId(arguments);
@@ -408,14 +413,21 @@ public final class CompanionTools {
                         return ToolResult.rejected("scope_denied",
                                 "This token may not control this companion");
                     }
+                    LocalBehavior behavior;
+                    Optional<CompanionSchedule> schedule;
                     try {
-                        LocalBehavior behavior = LocalBehavior.fromId(String.valueOf(
+                        behavior = LocalBehavior.fromId(String.valueOf(
                                 arguments.get("behavior")));
-                        return backend.setBehavior(id.get(), behavior);
+                        schedule = arguments.containsKey("schedule")
+                                ? Optional.of(CompanionSchedule.fromId(
+                                        String.valueOf(arguments.get("schedule"))))
+                                : Optional.empty();
                     } catch (IllegalArgumentException exception) {
                         return ToolResult.rejected("invalid_params",
-                                "behavior must be stay, follow or guard");
+                                "behavior must be stay, follow or guard and schedule must be "
+                                        + "all, day or night");
                     }
+                    return backend.setBehavior(id.get(), behavior, schedule);
                 });
 
         registry.register(new ToolSpec(
@@ -510,6 +522,7 @@ public final class CompanionTools {
                 json.append(",\"owner_id\":\"").append(owner).append('"'));
         json.append(",\"name\":\"").append(escape(snapshot.name())).append('"');
         json.append(",\"behavior\":\"").append(snapshot.behavior().id()).append('"');
+        json.append(",\"schedule\":\"").append(snapshot.schedule().id()).append('"');
         json.append(",\"home_set\":").append(snapshot.homeSet());
         return json.append('}').toString();
     }

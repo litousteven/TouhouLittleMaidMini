@@ -200,6 +200,7 @@ public final class CompanionCommands {
                 .collect(java.util.stream.Collectors.toSet());
         CompanionTokenStore.Issued issued = TlmmFabric.tokenStore()
                 .issue(ids, TokenScope.FULL, Duration.ofDays(days));
+        TlmmFabric.persistTokens(source.getServer());
         source.sendSuccess(() -> Component.literal(
                 "MCP token (shown once): " + issued.plaintext()), false);
         source.sendSuccess(() -> Component.literal(
@@ -227,6 +228,7 @@ public final class CompanionCommands {
             source.sendFailure(Component.literal("unknown token id"));
             return 0;
         }
+        TlmmFabric.persistTokens(source.getServer());
         source.sendSuccess(() -> Component.literal("MCP token revoked"), false);
         return 1;
     }

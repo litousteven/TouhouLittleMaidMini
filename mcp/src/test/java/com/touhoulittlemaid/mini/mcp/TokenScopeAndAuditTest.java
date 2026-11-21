@@ -181,7 +181,8 @@ class TokenScopeAndAuditTest {
 
         @Override
         public com.touhoulittlemaid.mini.core.ToolResult setBehavior(
-                java.util.UUID id, com.touhoulittlemaid.mini.core.LocalBehavior behavior) {
+                java.util.UUID id, com.touhoulittlemaid.mini.core.LocalBehavior behavior,
+                java.util.Optional<com.touhoulittlemaid.mini.core.CompanionSchedule> schedule) {
             return com.touhoulittlemaid.mini.core.ToolResult.ok("behavior_set", behavior.id());
         }
 

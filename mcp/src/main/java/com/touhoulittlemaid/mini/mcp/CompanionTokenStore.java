@@ -24,6 +24,22 @@ public final class CompanionTokenStore implements TokenAuthenticator {
     public record Issued(String plaintext, Record record) {
     }
 
+    /**
+     * The non-secret state needed to survive a server restart.
+     *
+     * <p>{@code digest} stays a one-way hash: persisting it does not let anyone recover
+     * the plaintext, so a restart can keep existing tokens valid without storing secrets.
+     */
+    public record Persisted(String id, String digestId, String digest, Set<UUID> companionIds,
+            Set<com.touhoulittlemaid.mini.core.ActionKind> allowedActions,
+            boolean canInteractWithWorld, long expiresAtEpochMilli) {
+
+        public Persisted {
+            companionIds = Set.copyOf(companionIds);
+            allowedActions = Set.copyOf(allowedActions);
+        }
+    }
+
     public record Record(String id, String digestId, Set<UUID> companionIds,
             TokenScope scope, Instant expiresAt) {
 
@@ -96,6 +112,39 @@ public final class CompanionTokenStore implements TokenAuthenticator {
         int before = tokens.size();
         tokens.entrySet().removeIf(entry -> entry.getValue().record().isExpired(now));
         return before - tokens.size();
+    }
+
+    /** Non-secret snapshot for persistence. Expired tokens are omitted. */
+    public synchronized List<Persisted> export() {
+        Instant now = Instant.now();
+        List<Persisted> snapshot = new ArrayList<>();
+        for (Stored stored : tokens.values()) {
+            Record record = stored.record();
+            if (record.isExpired(now)) {
+                continue;
+            }
+            snapshot.add(new Persisted(record.id(), record.digestId(),
+                    Base64.getEncoder().encodeToString(stored.digest()),
+                    record.companionIds(), record.scope().allowedActions(),
+                    record.scope().canInteractWithWorld(), record.expiresAt().toEpochMilli()));
+        }
+        return List.copyOf(snapshot);
+    }
+
+    /** Replaces the in-memory set with persisted entries; expired ones are dropped. */
+    public synchronized void restore(List<Persisted> persisted) {
+        tokens.clear();
+        Instant now = Instant.now();
+        for (Persisted entry : persisted) {
+            Instant expiresAt = Instant.ofEpochMilli(entry.expiresAtEpochMilli());
+            if (!now.isBefore(expiresAt)) {
+                continue;
+            }
+            Record record = new Record(entry.id(), entry.digestId(), entry.companionIds(),
+                    new TokenScope(entry.allowedActions(), entry.canInteractWithWorld()),
+                    expiresAt);
+            tokens.put(entry.id(), new Stored(record, Base64.getDecoder().decode(entry.digest())));
+        }
     }
 
     /** Test helper: the scope a stored token carries. */

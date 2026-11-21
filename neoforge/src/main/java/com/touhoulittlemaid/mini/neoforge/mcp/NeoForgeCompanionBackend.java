@@ -55,7 +55,8 @@ public final class NeoForgeCompanionBackend implements CompanionTools.CompanionB
     }
 
     @Override
-    public ToolResult setBehavior(UUID companionId, LocalBehavior behavior) {
+    public ToolResult setBehavior(UUID companionId, LocalBehavior behavior,
+            java.util.Optional<com.touhoulittlemaid.mini.core.CompanionSchedule> schedule) {
         return unavailable();
     }
 

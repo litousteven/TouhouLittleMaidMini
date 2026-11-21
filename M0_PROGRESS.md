@@ -1,15 +1,16 @@
 # 开发进度
 
-更新时间：`2026-11-20 22:10 CST`
+更新时间：`2026-11-21`
 
 当前目标：Minecraft `26.3`、Fabric 首发、Java `25`。NeoForge 只保留后续适配，
 不作为 `0.1` 门禁。
 
-**M0、M1、M2 已完成，M3 进行中。**
+**M0、M1、M2、M3 已完成，下一步 M4。**
 
 - M0 验收：[`docs/validation/M0.md`](docs/validation/M0.md)
 - M1 验收：[`docs/validation/M1.md`](docs/validation/M1.md)
 - M2 验收：[`docs/validation/M2.md`](docs/validation/M2.md)
+- M3 验收：[`docs/validation/M3.md`](docs/validation/M3.md)
 
 ## Git 状态
 
@@ -229,7 +230,9 @@ M2 结论：**Go**。协议、认证、作用域、审计、幂等、事件、�
 `ServerLevel.destroyBlock(pos, dropItems, entity)`，该入口接受任意 `Entity`，
 同伴实体同样适用。已按此实现并由 GameTest 覆盖。
 
-## M3 进度（进行中）
+## M3 进度：已完成
+
+验收记录：[`docs/validation/M3.md`](docs/validation/M3.md)。
 
 已完成并验证：
 
@@ -238,7 +241,7 @@ M2 结论：**Go**。协议、认证、作用域、审计、幂等、事件、�
 - `companion_context` 支持 `category`、`radius`、`tags`、`block_ids`、`entity_types`、
   `max_results`；未加载区块以 `unloaded`/`partial` 明确报告。
 - Fabric 后端实现 `self`、`owner`、`inventory`、`blocks`、`entities`、`containers`、
-  `hazards`；容器只列位置，不读取内容。
+  `hazards`；`containers` 返回槽位内容，上锁容器按锁码只报 `locked=true`。
 - `companion_inventory` 实现 `list/read/move/equip/drop`，支持背包、双手与四个护甲槽；
   不会凭空生成物品，`missing_item`、`inventory_full`、`busy` 均为显式结果。
 - `companion_inventory` 映射到 `INVENTORY` 动作族，只读 Token 不能再调用写动作；
@@ -247,26 +250,29 @@ M2 结论：**Go**。协议、认证、作用域、审计、幂等、事件、�
   `busy`；`companion_interact` 支持目标类型、左右键、主副手和 `sneak`。
 - 收获成熟作物后可从手部种子补种，复用原版 `HarvestFarmland` 语义；未成熟作物、
   unsupported 交互和失败均有明确 code。
+- `companion_interact target_kind=entity` 支持掉落物拾取：遵守背包容量，部分拾取会把溢出
+  留在原地，`inventory_full`/`not_ready` 为显式结果；非物品实体与空气交互明确 unsupported。
+- `CompanionSchedule`（all/day/night）参与 follow/guard 判定，随实体持久化并同步；通过
+  `companion_set_behavior` 的 `schedule` 参数设置，Agent 的显式请求不受日程过滤。
 - `companion_wait_events` 真正挂起 HTTP 线程直到该同伴的新事件或超时；服务端主线程
   不等待。事件按同伴过滤，游标与保留窗口语义不变。
 - 事件通过有界队列写入按大小滚动、按天数清理的 `logs/tlmm-events-*.log`，不会阻塞
   服务器线程；配置项为 `event_retention_days`、`event_max_file_mb`。
 - 按同伴签发、撤销和过期 Token：`/tlmm mcp token create|list|revoke`；服务端只保存
   SHA-256 摘要，工具调用按 Token 作用域过滤 `companion_list` 并拒绝越权同伴。
+- Token 摘要通过 `TokenSavedData` 持久化，服务端重启后已签发的 Token 继续有效。
 - 破坏性 `drop` 动作经过 `PermissionBroker`：首次返回 `permission_required`，游戏内
   可点击的 `/tlmm auth allow|deny <id>` 由 owner 或 OP 决定；允许只消费一次，拒绝在
   有效期内持续生效。
-- 测试：core 新增上下文、背包、移动/交互请求模型测试；mcp 新增数组校验、schema、
-  长轮询、滚动日志、权限票据与 Token 作用域测试；`:fabric:runGameTestServer` →
-  `All 40 required tests passed`。
 - 断线宽限期由 `AgentPresence` + `AgentWatchdog` 实现：超过 `disconnect_grace_seconds`
   后停止导航并切到配置的安全模式；`continue_operation_after_disconnect` 可保留操作。
-- Skill 示例：`skills/core/harvest_crops`、`organize_inventory` 可执行；
-  `collect_items`、`fishing` 明确标注当前交互缺口，不伪造完成。
-- 小麦与胡萝卜使用同一套动作完成收获与补种，由 GameTest 覆盖。
+- Skill 示例：`skills/core/harvest_crops`、`organize_inventory`、`collect_items` 可执行；
+  `fishing` 明确标注需要自定义 `Projectile` 钓鱼钩，不伪造完成。
+- 测试：`:core:test :mcp:test` 通过；`:fabric:runGameTestServer` →
+  `All 47 required tests passed`。
 
-尚未完成：实体/空气交互、他人容器内容、日程判定、Token 持久化、真实 CLI Skill E2E。
-详见 [`docs/validation/M3.md`](docs/validation/M3.md)。
+明确的交互边界见 [`docs/validation/M3.md`](docs/validation/M3.md) 第 4 节：原版
+`FishingHook` 与 `Entity.interact` 都要求 `Player`，空气与钓鱼留待后续 L2 provider。
 
 ## 恢复工作
 
@@ -290,10 +296,10 @@ git log -3 --oneline --decorate
 即使带 Vulkan 仍崩溃时，先删除 `run/clientGametest/options.txt` 和截图缓存；陈旧
 选项会导致同样的原生访问冲突。
 
-下一步是 M3：先做 `companion_context` 标签/实体过滤、`companion_inventory` 写动作
-与装备槽、移动/交互扩展，再做长轮询、按同伴 Token 与游戏内授权、断线降级、日程与
-Skill。服务端配置位于 `config/touhou-little-maid-mini-server.toml`，示例见
-`config-examples/`。
+下一步是 M4：客户端模型与动画、界面视觉整理、中英文文本、MCP 连接引导、配置校验与
+迁移、性能与长稳测试、许可证清单与发布说明。M4 验收还要求真实专用服 + CLI 的完整
+Skill E2E 与新作物实机验证。服务端配置位于 `config/touhou-little-maid-mini-server.toml`，
+示例见 `config-examples/`。
 
 macOS 旧环境（已不再使用，仅存档）：
 

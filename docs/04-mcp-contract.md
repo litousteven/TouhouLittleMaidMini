@@ -131,7 +131,7 @@ Token scope 之外的同伴不出现在结果中。
 | `inventory` | 物品、数量、装备、书与特殊容器摘要 |
 | `blocks` | 按方块 ID、标签和半径返回已加载方块摘要 |
 | `entities` | 按种类、标签和半径返回实体摘要 |
-| `containers` | 已授权且可安全读取的附近容器摘要 |
+| `containers` | 已加载、可读取的附近容器摘要与槽位内容 |
 | `hazards` | 岩浆、火、TNT、深坑和危险实体 |
 
 `radius` 不会超过服务端配置的 `max_action_radius`。未加载区块返回 `unknown`，不能当作空。
@@ -151,6 +151,10 @@ Token scope 之外的同伴不出现在结果中。
 
 不提供专为模组编写的 `farm`、`machine` 等类别；Agent 使用标签、ID、方块状态和 Skill
 理解未知内容。
+
+`category=containers` 返回每个已加载容器的位置、方块 ID、是否上锁（`locked`）、是否为空
+（`empty`）、槽位数和 `contents`。上锁容器只报告 `locked=true` 且 `contents` 为空数组，
+不返回内容；其余容器返回 `{slot,item,count}` 列表，不返回完整 NBT。
 
 ## 5. `companion_set_behavior`
 
@@ -173,7 +177,9 @@ Token scope 之外的同伴不出现在结果中。
 - `stay`
 - `guard`
 
-`schedule` 允许 `all`、`day`、`night`。后续可以加入不重叠的时间区间。
+`schedule` 允许 `all`、`day`、`night`，省略时保持当前日程。日程只约束同伴自身的本地
+行为（`follow`、`guard` 的自主行动）；Agent 的显式工具请求不受日程过滤。后续可以加入
+不重叠的时间区间。
 
 结果：
 
@@ -267,10 +273,18 @@ Token scope 之外的同伴不出现在结果中。
 - `right` + `block` + 成熟作物：按原版 `destroyBlock(pos, true, entity)` 收获。
 - `right` + 空方块 + 下方耕地：从 `hand` 指向的手中选择可种植 `BlockItem` 并补种，
   消耗一个物品，与村民 `HarvestFarmland` 的语义一致。
-- 未成熟作物返回 `not_ready`；其他方块、实体和空气交互明确返回
+- `right` + `entity` + 掉落物（`ItemEntity`）：把物品放入背包，遵守背包容量；放不下的
+  部分留在原地。返回 `picked_up`，背包满返回 `inventory_full`，仍在拾取延迟内返回
+  `not_ready`。
+- 未成熟作物返回 `not_ready`；其他方块、非物品实体和空气交互明确返回
   `unsupported_interaction`，不会伪造成功。
 - 具体物品选择由调用方先通过 `companion_inventory` 准备好；`sneak` 会被接受，但
   不改变当前支持的动作。
+
+空气交互与钓鱼在本版本明确不支持：原版 `FishingHook` 的 owner 必须是 `Player`
+（`getPlayerOwner()`、`retrieve()` 都依赖 `Player` / `ServerPlayer`）。非玩家钓鱼需要
+像 TouhouLittleMaid 那样实现自定义 `Projectile` 钓鱼钩，属于后续 L2 provider，而不是
+假玩家方案。
 
 结果返回操作 ID；真实变化通过事件回传。
 
