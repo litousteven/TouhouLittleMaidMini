@@ -16,12 +16,10 @@
 ## Git 状态
 
 - 当前分支：`main`
-- `HEAD`：`7f09dfe docs(m0): record Fabric validation checkpoint`
-- 先前提交：`7182204 test(m0): add Fabric client render probe`、
-  `d067d39 feat(m0): add Fabric platform probe`
-- 未提交的 M0 收尾改动：`fabric/build.gradle`、`docs/validation/M0.md`、
-  `M0_PROGRESS.md`、`README.md`。
-- `M0` 完成提交尚未创建。
+- 发布点：tag `v0.1.0-beta`，与 `gradle.properties` 的 `version` 一致
+- 发布流程：推送 `v*` tag 后由 `.github/workflows/release.yml` 构建并创建 GitHub
+  Release；产物只有 Fabric jar，NeoForge 模块不随本版发布
+- 发布说明按版本存放于 `docs/releases/<tag>.md`，工作流缺少该文件时拒绝发布
 
 ## 已完成
 

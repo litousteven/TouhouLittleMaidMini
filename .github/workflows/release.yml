@@ -1,0 +1,99 @@
+name: Release
+
+# Publishing happens from the tag, using the token GitHub gives the workflow, so no
+# personal credential is needed to cut a release. Keep the release notes in
+# docs/releases/<tag>.md and the job refuses to publish without them.
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Build and publish the GitHub release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 25
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: gradle
+
+      - name: Check the tag against the project version
+        run: |
+          set -euo pipefail
+          version="$(sed -n 's/^version=//p' gradle.properties | head -n1 | tr -d '\r')"
+          if [ "v${version}" != "${GITHUB_REF_NAME}" ]; then
+            echo "tag ${GITHUB_REF_NAME} does not match gradle.properties version '${version}'" >&2
+            exit 1
+          fi
+          echo "Building ${version}"
+
+      # build runs the unit tests, the translation key check and the jar packaging.
+      # The GameTest server suite is not part of this job: it needs a full game
+      # server and is recorded in docs/validation/M4.md instead of gating the tag.
+      - name: Build and test
+        run: ./gradlew build --console=plain --stacktrace
+
+      - name: Collect the Fabric jar
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          mkdir -p dist
+          for jar in fabric/build/libs/*.jar; do
+            case "${jar}" in
+              *-sources.jar|*-javadoc.jar|*-dev.jar) continue ;;
+            esac
+            cp "${jar}" dist/
+          done
+          if [ -z "$(ls -A dist 2>/dev/null)" ]; then
+            echo "no Fabric jar was produced" >&2
+            exit 1
+          fi
+          ls -l dist
+
+      - name: Prepare the release body
+        run: |
+          set -euo pipefail
+          notes="docs/releases/${GITHUB_REF_NAME}.md"
+          if [ ! -f "${notes}" ]; then
+            echo "${notes} is missing; refusing to publish an unexplained release" >&2
+            exit 1
+          fi
+          cp "${notes}" "${RUNNER_TEMP}/release-body.md"
+
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if [[ "${GITHUB_REF_NAME}" == *-* ]]; then
+            prerelease=1
+          else
+            prerelease=0
+          fi
+          if gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1; then
+            # Re-running the workflow must not fail on an existing release.
+            gh release upload "${GITHUB_REF_NAME}" dist/*.jar --clobber
+            gh release edit "${GITHUB_REF_NAME}" \
+              --title "${GITHUB_REF_NAME}" \
+              --notes-file "${RUNNER_TEMP}/release-body.md"
+          else
+            args=(--title "${GITHUB_REF_NAME}" --notes-file "${RUNNER_TEMP}/release-body.md")
+            if [ "${prerelease}" -eq 1 ]; then
+              args+=(--prerelease)
+            fi
+            gh release create "${GITHUB_REF_NAME}" dist/*.jar "${args[@]}"
+          fi
