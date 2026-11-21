@@ -4,7 +4,11 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
 
 class CompanionServerConfigTest {
@@ -21,35 +25,26 @@ class CompanionServerConfigTest {
     }
 
     @Test
-    void parsesTheShippedExample() {
-        String example = """
-                enabled = true
-                host = "127.0.0.1"
-                port = 8765
-                require_token = true
-                disconnect_grace_seconds = 60
-                continue_operation_after_disconnect = false
-                safe_mode_after_disconnect = "stay"
-                max_companions = 16
-                max_action_radius = 64
-                event_retention_days = 7
-                event_max_file_mb = 16
-
-                [limits]
-                max_concurrent_calls = 4
-                default_event_wait_seconds = 50
-
-                [safety]
-                owner_confirmation_timeout_seconds = 120
-                require_confirmation_for_other_players = true
-                """;
-        CompanionServerConfig.ParseResult result = CompanionServerConfig.parse(example);
+    void parsesTheShippedExample() throws IOException {
+        Path example = shippedExamplePath();
+        String text = Files.readString(example);
+        CompanionServerConfig.ParseResult result = CompanionServerConfig.parse(text);
         assertFalse(result.hasProblems(), () -> result.problems().toString());
-        CompanionServerConfig config = result.config();
-        assertEquals(64, config.maxActionRadius());
-        assertEquals(60, config.disconnectGraceSeconds());
-        assertEquals(LocalBehavior.STAY, config.safeModeAfterDisconnect());
-        assertEquals(16, config.maxCompanions());
+        // The example is the published template, not a free-form sample. Comparing it to
+        // the code defaults makes doc drift a test failure instead of a silent mismatch
+        // between what the operator reads and what the server actually does.
+        assertEquals(CompanionServerConfig.defaults(), result.config());
+    }
+
+    private static Path shippedExamplePath() {
+        Path fromRoot = Path.of("..", "config-examples", "touhou-little-maid-mini-server.toml");
+        if (Files.exists(fromRoot)) {
+            return fromRoot;
+        }
+        Path fromModule = Path.of("config-examples", "touhou-little-maid-mini-server.toml");
+        assumeTrue(Files.exists(fromModule),
+                "config-examples is not reachable from the test working directory");
+        return fromModule;
     }
 
     @Test

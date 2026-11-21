@@ -13,3 +13,12 @@ dependencies {
     testImplementation 'org.junit.jupiter:junit-jupiter'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
+
+// CompanionServerConfigTest compares the published example against the code defaults.
+// Without this input the test task stays up-to-date when only the example changes, so a
+// drifted example would pass CI on a cached result.
+tasks.named('test', Test) {
+    inputs.file(rootProject.file('config-examples/touhou-little-maid-mini-server.toml'))
+            .withPropertyName('shippedServerConfigExample')
+            .withPathSensitivity(PathSensitivity.RELATIVE)
+}
