@@ -65,9 +65,61 @@ public final class KnowledgeStore {
         return lookup(id, kind, SemanticSource.USER).isPresent();
     }
 
+    /** Finds a pending row without knowing its kind; used by the review UI. */
+    public Optional<SemanticEntry> pendingById(String id) {
+        if (id == null || id.isBlank()) {
+            return Optional.empty();
+        }
+        return pending.values().stream()
+                .filter(entry -> entry.id().equals(id))
+                .findFirst();
+    }
+
+    /** Finds an accepted row without knowing its kind. */
+    public Optional<SemanticEntry> anyById(String id) {
+        if (id == null || id.isBlank()) {
+            return Optional.empty();
+        }
+        return accepted.values().stream()
+                .filter(entry -> entry.id().equals(id))
+                .findFirst();
+    }
+
+    /** Drops every row of one namespace; returns how many rows went away. */    public int removeNamespace(String namespace) {
+        if (namespace == null || namespace.isBlank()) {
+            return 0;
+        }
+        int removed = 0;
+        var iterator = accepted.entrySet().iterator();
+        while (iterator.hasNext()) {
+            if (namespace.equals(iterator.next().getValue().namespace())) {
+                iterator.remove();
+                removed++;
+            }
+        }
+        var pendingIterator = pending.entrySet().iterator();
+        while (pendingIterator.hasNext()) {
+            if (namespace.equals(pendingIterator.next().getValue().namespace())) {
+                pendingIterator.remove();
+                removed++;
+            }
+        }
+        return removed;
+    }
+
     public boolean remove(String id, SemanticKind kind) {
         boolean removed = accepted.remove(Key.of(kind, id)) != null;
         removed |= pending.remove(Key.of(kind, id)) != null;
+        return removed;
+    }
+
+    /** Removes one id from every kind and from both states; used by the review UI. */
+    public boolean removeAny(String id) {
+        if (id == null || id.isBlank()) {
+            return false;
+        }
+        boolean removed = accepted.entrySet().removeIf(row -> row.getValue().id().equals(id));
+        removed |= pending.entrySet().removeIf(row -> row.getValue().id().equals(id));
         return removed;
     }
 

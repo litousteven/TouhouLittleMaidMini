@@ -102,6 +102,7 @@ public final class CompanionCommands {
                                                                 "value")))))
                                 .then(Commands.literal("status")
                                         .executes(context -> llmStatus(context.getSource()))))
+                        .then(KnowledgeCommands.node())
                         .then(Commands.literal("mcp")
                                 .then(Commands.literal("token")
                                         .then(Commands.literal("create")

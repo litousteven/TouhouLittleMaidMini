@@ -138,6 +138,8 @@ public final class FarmGoal extends Goal {
         if (id == null || id.isEmpty() || !reportedUnknown.add(id)) {
             return;
         }
+        com.touhoulittlemaid.mini.fabric.semantic.KnowledgeService.noteUnknown(id,
+                com.touhoulittlemaid.mini.core.semantic.SemanticKind.BLOCK);
         CompanionRuntimeState.publish(companion.getUUID(), "unknown_category",
                 "{\"block\":\"" + id + "\",\"source\":\"local_farm\"}");
     }

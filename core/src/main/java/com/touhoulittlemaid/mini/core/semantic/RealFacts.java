@@ -20,4 +20,26 @@ public interface RealFacts {
 
     /** Stage 5: built-in fallback, confidence 0.4. */
     Set<SemanticTag> heuristic(SemanticKind kind, String id);
+
+    /**
+     * Raw data pack tags, as {@code #namespace:path} strings.
+     *
+     * <p>These are evidence for a model, not a classification: the resolver never reads
+     * them. They are what lets the model say "this is in {@code #c:ores} but I do not know
+     * which ore" instead of guessing from the name alone.
+     */
+    default Set<String> rawTags(SemanticKind kind, String id) {
+        return Set.of();
+    }
+
+    /**
+     * Content that must never be classified as hostile, whatever a model says.
+     *
+     * <p>Players, villagers and bosses are type-level exclusions. Instance-level ones — a
+     * named pet, a tamed animal — are checked by the guard itself, because the knowledge
+     * layer describes types, not instances.
+     */
+    default boolean hostileExcluded(SemanticKind kind, String id) {
+        return false;
+    }
 }

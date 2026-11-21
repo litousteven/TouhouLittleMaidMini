@@ -72,4 +72,32 @@ public enum SemanticTag {
     public static boolean isMaterial(SemanticTag tag) {
         return MATERIAL_GROUP.contains(tag);
     }
+
+    /**
+     * Directory name used when exporting this category as a {@code #tlmm:} tag.
+     *
+     * <p>Plural on purpose: tag paths read like sets, and the exported pack only ever
+     * creates its own namespace, never rewriting a mod's or vanilla's tag files.
+     */
+    public String tagPath() {
+        return switch (this) {
+            case CROP -> "crops";
+            case SEED -> "seeds";
+            case FOOD -> "foods";
+            case RAW_FOOD -> "raw_foods";
+            case FUEL -> "fuels";
+            case LOG -> "logs";
+            case PLANK -> "planks";
+            case STONE -> "stones";
+            case ORE -> "ores";
+            case BUILDING_BLOCK -> "building_blocks";
+            case STATION -> "stations";
+            case CONTAINER -> "containers";
+            case TOOL -> "tools";
+            case HOSTILE -> "hostile";
+            case LIVESTOCK -> "livestock";
+            case BREEDABLE -> "breedable";
+            case DECORATIVE -> "decorative";
+        };
+    }
 }

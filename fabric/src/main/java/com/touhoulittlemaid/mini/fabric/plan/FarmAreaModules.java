@@ -79,6 +79,8 @@ final class FarmAreaModules {
             if (crops.isEmpty()) {
                 String unknown = firstUnknownCrop(fabric, params);
                 if (unknown != null) {
+                    com.touhoulittlemaid.mini.fabric.semantic.KnowledgeService.noteUnknown(
+                            unknown, com.touhoulittlemaid.mini.core.semantic.SemanticKind.BLOCK);
                     return ModuleResult.failed(FailureCodes.UNKNOWN_CATEGORY,
                             unknown + " has an age property but no known category; "
                                     + "add it to the knowledge layer");

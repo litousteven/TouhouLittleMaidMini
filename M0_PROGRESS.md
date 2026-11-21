@@ -318,7 +318,7 @@ M2 结论：**Go**。协议、认证、作用域、审计、幂等、事件、�
 `.\scripts\soak.ps1 -Minutes 1440 -IntervalSeconds 60` 并保存 CSV；短时验证不能替代该门禁。
 首次客户端启动若出现 `0xC0000005`，删除客户端缓存后重试；本机第二次运行已稳定通过。
 
-## M6 进度：0.2 模块框架、模块库与语义底座（M6.0–M6.3）
+## M6 进度：0.2 模块框架、模块库、语义底座与标注闭环（M6.0–M6.3b）
 
 验收记录：[`docs/validation/M6.0.md`](docs/validation/M6.0.md)、
 [`docs/validation/M6.1.md`](docs/validation/M6.1.md)、
@@ -339,8 +339,12 @@ M2 结论：**Go**。协议、认证、作用域、审计、幂等、事件、�
 - 验证：`:core:test :mcp:test :llm:test` 共 183 个用例通过；
   `:fabric:runGameTestServer` → `All 82 required tests passed`（连续三次）；
   `verifyTranslations` 78 键一致。
-- 未开始：`M6.3b` 标注闭环、`M6.4` 客户端脑、`M6.5` 自主模式、`M6.6` 学习闭环、
-  `M6.7` 发布验收。
+- 标注闭环（M6.3b）：`KnowledgeCandidate/Batch/BatchJson/Ingest/ScanLedger/Exporter`、
+  `UnknownContentScanner`、`KnowledgeService`、`/tlmm knowledge` 命令组、审阅界面与
+  S2C 视图包；`hostile` 必须人工确认，批次可整批回滚，可导出 `#tlmm:` 数据包。
+- 验证：`core 126` / `mcp 79` / `llm 3` 共 208 个用例；89 个 GameTest（连跑三次一致）；
+  `verifyTranslations` 100 键一致。
+- 未开始：`M6.4` 客户端脑、`M6.5` 自主模式、`M6.6` 学习闭环、`M6.7` 发布验收。
 
 ## 恢复工作
 

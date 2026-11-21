@@ -116,7 +116,7 @@ public final class M6SemanticGameTests {
     @GameTest(maxTicks = 200)
     public void knowledgeEntryMakesUnknownBlockFarmable(GameTestHelper helper) {
         Path directory = gameDir().resolve("config").resolve("tlmm")
-                .resolve("knowledge-gametest");
+                .resolve("knowledge-gametest").resolve("file");
         try {
             Files.createDirectories(directory);
             Files.writeString(directory.resolve("minecraft.json"), """
@@ -130,11 +130,29 @@ public final class M6SemanticGameTests {
             throw helper.assertionException("could not write the knowledge file: "
                     + exception.getMessage());
         }
-        SemanticService.load(directory);
-        KnowledgeStore.LoadReport report = SemanticService.lastReport();
-        if (report.accepted() != 1) {
-            throw helper.assertionException("knowledge entry was not accepted: " + report);
+        // Read the file into a local store: reloading the process-wide one would wipe the
+        // state of every other test running in this batch.
+        var facts = new com.touhoulittlemaid.mini.fabric.semantic.FabricRealFacts();
+        KnowledgeStore local = new KnowledgeStore();
+        KnowledgeStore.LoadReport loaded = local.load(directory, facts);
+        if (loaded.accepted() != 1) {
+            throw helper.assertionException("knowledge entry was not accepted: " + loaded);
         }
+        var fileResolution = com.touhoulittlemaid.mini.core.semantic.SemanticTags.resolve(
+                "minecraft:nether_wart", com.touhoulittlemaid.mini.core.semantic.SemanticKind.BLOCK,
+                facts, local);
+        if (!fileResolution.has(SemanticTag.CROP)
+                || fileResolution.source() != SemanticSource.MODEL) {
+            throw helper.assertionException("the file did not classify nether wart: "
+                    + fileResolution);
+        }
+
+        // The same line, applied to the live store, is what the farm goal actually reads.
+        com.touhoulittlemaid.mini.fabric.semantic.KnowledgeService.store().put(
+                new com.touhoulittlemaid.mini.core.semantic.SemanticEntry("minecraft:nether_wart",
+                        com.touhoulittlemaid.mini.core.semantic.SemanticKind.BLOCK,
+                        java.util.Set.of(SemanticTag.CROP), SemanticSource.MODEL, 0.9D,
+                        "gametest", "age property, harvestable"));
         var resolution = SemanticService.resolve(Blocks.NETHER_WART.defaultBlockState());
         if (!resolution.has(SemanticTag.CROP) || resolution.source() != SemanticSource.MODEL) {
             throw helper.assertionException("nether wart was not classified: " + resolution);
@@ -166,7 +184,8 @@ public final class M6SemanticGameTests {
                         + " mature=" + CropShape.isMature(state)
                         + " resolution=" + SemanticService.resolve(state));
             }
-            SemanticService.load(SemanticService.knowledgeDirectory(gameDir()));
+            com.touhoulittlemaid.mini.fabric.semantic.KnowledgeService
+                    .forgetEntry("minecraft:nether_wart");
         });
     }
 

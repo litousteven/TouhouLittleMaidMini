@@ -88,6 +88,8 @@ class SemanticTagsTest {
         final Map<String, Set<SemanticTag>> data = new HashMap<>();
         final Map<String, Set<SemanticTag>> tags = new HashMap<>();
         final Map<String, Set<SemanticTag>> heuristic = new HashMap<>();
+        final Map<String, Set<String>> rawTags = new HashMap<>();
+        final java.util.Set<String> hostileExcluded = new java.util.HashSet<>();
         boolean everythingExists = true;
 
         @Override
@@ -108,6 +110,16 @@ class SemanticTagsTest {
         @Override
         public Set<SemanticTag> heuristic(SemanticKind kind, String id) {
             return heuristic.getOrDefault(id, Set.of());
+        }
+
+        @Override
+        public Set<String> rawTags(SemanticKind kind, String id) {
+            return rawTags.getOrDefault(id, Set.of());
+        }
+
+        @Override
+        public boolean hostileExcluded(SemanticKind kind, String id) {
+            return hostileExcluded.contains(id);
         }
     }
 }

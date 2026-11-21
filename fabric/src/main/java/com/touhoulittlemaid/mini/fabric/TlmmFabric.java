@@ -46,6 +46,7 @@ public final class TlmmFabric implements ModInitializer {
     public void onInitialize() {
         FabricContent.register();
         CompanionCommands.register();
+        com.touhoulittlemaid.mini.fabric.network.KnowledgeNetworking.register();
         net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents.END_SERVER_TICK.register(
                 com.touhoulittlemaid.mini.fabric.runtime.AgentWatchdog::tick);
         net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents.END_SERVER_TICK.register(
@@ -59,7 +60,7 @@ public final class TlmmFabric implements ModInitializer {
             LOGGER.info("[m0] saved-data baseline value={}", saveVersion);
             CompanionConfigs.load();
             com.touhoulittlemaid.mini.fabric.config.LlmConfigs.load();
-            com.touhoulittlemaid.mini.fabric.semantic.SemanticService.load(
+            com.touhoulittlemaid.mini.fabric.semantic.KnowledgeService.load(
                     com.touhoulittlemaid.mini.fabric.semantic.SemanticService
                             .knowledgeDirectory(FabricLoader.getInstance().getGameDir()));
             com.touhoulittlemaid.mini.fabric.runtime.LlmRuntime.install(server);
@@ -94,7 +95,7 @@ public final class TlmmFabric implements ModInitializer {
             }
             CompanionConfigs.reset();
             com.touhoulittlemaid.mini.fabric.config.LlmConfigs.reset();
-            com.touhoulittlemaid.mini.fabric.semantic.SemanticService.reset();
+            com.touhoulittlemaid.mini.fabric.semantic.KnowledgeService.reset();
             com.touhoulittlemaid.mini.fabric.runtime.LlmRuntime.reset();
             ServerDiagnostics.reset();
             state.set(PlatformState.starting(MOD_VERSION, MINECRAFT_VERSION));

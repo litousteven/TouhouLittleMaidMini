@@ -104,6 +104,60 @@ public final class FabricRealFacts implements RealFacts {
         };
     }
 
+    @Override
+    public Set<String> rawTags(SemanticKind kind, String id) {
+        return switch (kind) {
+            case ITEM -> item(id) == null ? Set.of()
+                    : tagsOf(item(id).builtInRegistryHolder().tags());
+            case BLOCK -> block(id) == null ? Set.of()
+                    : tagsOf(block(id).builtInRegistryHolder().tags());
+            case ENTITY -> entityType(id) == null ? Set.of()
+                    : tagsOf(entityType(id).builtInRegistryHolder().tags());
+        };
+    }
+
+    /**
+     * Type-level hard exclusions for {@code hostile}.
+     *
+     * <p>Named pets and tamed animals are instance facts, so the guard has to check them at
+     * targeting time; this list is only the part the knowledge layer can decide.
+     */
+    @Override
+    public boolean hostileExcluded(SemanticKind kind, String id) {
+        if (kind != SemanticKind.ENTITY) {
+            return false;
+        }
+        EntityType<?> type = entityType(id);
+        if (type == null) {
+            return false;
+        }
+        Class<? extends net.minecraft.world.entity.Entity> base = type.getBaseClass();
+        return net.minecraft.world.entity.player.Player.class.isAssignableFrom(base)
+                || net.minecraft.world.entity.npc.villager.AbstractVillager.class.isAssignableFrom(base)
+                || net.minecraft.world.entity.boss.enderdragon.EnderDragon.class
+                        .isAssignableFrom(base)
+                || net.minecraft.world.entity.boss.wither.WitherBoss.class
+                        .isAssignableFrom(base)
+                || net.minecraft.world.entity.monster.warden.Warden.class
+                        .isAssignableFrom(base);
+    }
+
+    private static Set<String> tagsOf(java.util.stream.Stream<? extends TagKey<?>> tags) {
+        Set<String> values = tags.map(TagKey::location)
+                .map(location -> "#" + location)
+                .collect(java.util.stream.Collectors.toCollection(
+                        java.util.LinkedHashSet::new));
+        return values.isEmpty() ? Set.of() : Set.copyOf(values);
+    }
+
+    private static EntityType<?> entityType(String id) {
+        try {
+            return BuiltInRegistries.ENTITY_TYPE.getValue(Identifier.parse(id));
+        } catch (RuntimeException exception) {
+            return null;
+        }
+    }
+
     private Set<SemanticTag> itemTags(String id) {
         Item item = item(id);
         if (item == null) {

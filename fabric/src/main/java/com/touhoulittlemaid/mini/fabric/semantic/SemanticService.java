@@ -106,4 +106,13 @@ public final class SemanticService {
     public static boolean directoryExists(Path directory) {
         return directory != null && Files.isDirectory(directory);
     }
+
+    /** Real data pack tags, for the annotation request. */
+    public static java.util.Set<String> rawTags(SemanticKind kind, String id) {
+        return FACTS.rawTags(kind, id);
+    }
+
+    public static boolean hostileExcluded(SemanticKind kind, String id) {
+        return FACTS.hostileExcluded(kind, id);
+    }
 }
