@@ -38,6 +38,71 @@ sourceSets {
     }
 }
 
+// core and mcp are plain Java libraries with no Minecraft imports, so their classes
+// belong inside the mod jar. Depending on them is not enough: Gradle never packs
+// project dependencies into a jar, and Fabric Loader only reads nested jars that are
+// themselves mods. Without this the released jar loads and dies on the first
+// com.touhoulittlemaid.mini.core reference with NoClassDefFoundError.
+configurations {
+    bundledLibrary {
+        canBeConsumed = false
+        canBeResolved = true
+        transitive = false
+    }
+}
+
+dependencies {
+    bundledLibrary project(':core')
+    bundledLibrary project(':mcp')
+}
+
+tasks.named('jar', Jar) {
+    // Depending on the configuration makes the jar wait for :core:jar and :mcp:jar;
+    // without it Gradle 9 fails the build for using their outputs unannounced.
+    dependsOn configurations.bundledLibrary
+    from({ configurations.bundledLibrary.collect { zipTree(it) } }) {
+        exclude 'META-INF/MANIFEST.MF'
+    }
+}
+
+// The packaged jar, not the source set, is what users install, so verify the
+// bundled packages are actually inside it. Scanning build/libs keeps this
+// independent of Loom's internal task names.
+tasks.register('verifyPackagedMod') {
+    group = 'verification'
+    description = 'Fails when the packaged jar is missing the bundled core or mcp classes.'
+    dependsOn 'assemble'
+    def outputDir = layout.buildDirectory.dir('libs')
+    inputs.dir(outputDir)
+    doLast {
+        def required = ['com/touhoulittlemaid/mini/core/', 'com/touhoulittlemaid/mini/mcp/']
+        def jars = fileTree(outputDir) { include '*.jar' }.files.findAll { jar ->
+            !jar.name.endsWith('-sources.jar') && !jar.name.endsWith('-javadoc.jar') && !jar.name.endsWith('-dev.jar')
+        }
+        if (jars.isEmpty()) {
+            throw new GradleException("no installable jar was produced in ${outputDir.get().asFile}")
+        }
+        def archive = jars.sort { it.name }.last()
+        def zip = new java.util.zip.ZipFile(archive)
+        try {
+            def names = zip.entries().collect { it.name }
+            required.each { prefix ->
+                if (!names.any { it.startsWith(prefix) }) {
+                    throw new GradleException(
+                            "${archive.name} contains no ${prefix} entries; " +
+                                    'the installed mod would fail with NoClassDefFoundError')
+                }
+            }
+        } finally {
+            zip.close()
+        }
+    }
+}
+
+tasks.named('build') {
+    dependsOn 'verifyPackagedMod'
+}
+
 def graphicsBackend = providers.gradleProperty('tlmm.graphicsBackend')
 
 loom {

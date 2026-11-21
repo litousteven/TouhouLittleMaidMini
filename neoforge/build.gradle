@@ -17,6 +17,28 @@ dependencies {
     implementation project(':mcp')
 }
 
+// Same reason as fabric/build.gradle: Gradle does not pack project dependencies into
+// the jar, so the shared classes have to be merged in or the mod cannot load.
+configurations {
+    bundledLibrary {
+        canBeConsumed = false
+        canBeResolved = true
+        transitive = false
+    }
+}
+
+dependencies {
+    bundledLibrary project(':core')
+    bundledLibrary project(':mcp')
+}
+
+tasks.named('jar', Jar) {
+    dependsOn configurations.bundledLibrary
+    from({ configurations.bundledLibrary.collect { zipTree(it) } }) {
+        exclude 'META-INF/MANIFEST.MF'
+    }
+}
+
 sourceSets {
     client {
         java.srcDir rootProject.file('client/src/main/java')
