@@ -56,6 +56,21 @@ $requestId = 100
 
 Write-Host ("Soak start: {0} minutes, sample every {1}s -> {2}" -f $Minutes, $IntervalSeconds, $Output)
 
+# Persist each sample as it is taken. A 24h run that is killed, crashes or loses its
+# console must still leave usable evidence behind, so the CSV is never written only at
+# the end.
+$csvInitialized = $false
+function Add-SoakSample {
+    param($Sample)
+    if (-not $script:csvInitialized) {
+        $Sample | Export-Csv -Path $Output -NoTypeInformation -Encoding UTF8
+        $script:csvInitialized = $true
+    } else {
+        $line = ($Sample | ConvertTo-Csv -NoTypeInformation)[1]
+        Add-Content -Path $Output -Value $line -Encoding UTF8
+    }
+}
+
 while ((Get-Date) -lt $end) {
     $requestId++
     $timestamp = Get-Date
@@ -74,6 +89,7 @@ while ((Get-Date) -lt $end) {
             mcp_connected = $result.mcp_connected
         }
         $samples.Add($sample)
+        Add-SoakSample $sample
         $consecutiveFailures = 0
         Write-Host ("{0} companions={1} mspt={2}/{3} heap={4}MB threads={5} events={6}" -f `
             $timestamp.ToString("HH:mm:ss"), $result.companion_count, $result.mspt_average, `
@@ -82,7 +98,7 @@ while ((Get-Date) -lt $end) {
         $failures++
         $consecutiveFailures++
         Write-Warning ("sample failed ({0} consecutive): {1}" -f $consecutiveFailures, $_.Exception.Message)
-        $samples.Add([pscustomobject]@{
+        $failedSample = [pscustomobject]@{
             timestamp = $timestamp.ToString("o")
             companion_count = $null
             mspt_average = $null
@@ -92,9 +108,10 @@ while ((Get-Date) -lt $end) {
             thread_count = $null
             retained_events = $null
             mcp_connected = $false
-        })
+        }
+        $samples.Add($failedSample)
+        Add-SoakSample $failedSample
         if ($consecutiveFailures -ge $MaxConsecutiveFailures) {
-            $samples | Export-Csv -Path $Output -NoTypeInformation -Encoding UTF8
             throw "Soak aborted: $consecutiveFailures consecutive sample failures. Partial CSV: $Output"
         }
     }
@@ -103,7 +120,6 @@ while ((Get-Date) -lt $end) {
     }
 }
 
-$samples | Export-Csv -Path $Output -NoTypeInformation -Encoding UTF8
 if ($samples.Count -eq 0) {
     throw "No samples were collected"
 }
