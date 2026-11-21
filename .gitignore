@@ -17,6 +17,9 @@ runs/
 .commandcode/
 .workbuddy/
 
+# Local toolchain downloaded for verification only
+.gradle-local/
+
 # Local secrets and generated MCP credentials
 *.token
 *.secret

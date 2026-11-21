@@ -8,6 +8,7 @@ import com.touhoulittlemaid.mini.core.CompanionSnapshot;
 import com.touhoulittlemaid.mini.core.LocalBehavior;
 import com.touhoulittlemaid.mini.fabric.config.CompanionConfigs;
 import com.touhoulittlemaid.mini.fabric.entity.goal.BehaviorFollowOwnerGoal;
+import com.touhoulittlemaid.mini.fabric.entity.goal.FarmGoal;
 import com.touhoulittlemaid.mini.fabric.entity.goal.ReturnHomeGoal;
 import com.touhoulittlemaid.mini.fabric.menu.CompanionMenus;
 import com.touhoulittlemaid.mini.fabric.runtime.CompanionRuntimeState;
@@ -133,9 +134,10 @@ public final class CompanionEntity extends TamableAnimal {
                 false, false, this::isValidGuardTarget));
         goalSelector.addGoal(3, new HurtByTargetGoal(this));
         goalSelector.addGoal(4, new ReturnHomeGoal(this));
-        goalSelector.addGoal(5, new WaterAvoidingRandomStrollGoal(this, 0.6D));
-        goalSelector.addGoal(6, new LookAtPlayerGoal(this, Player.class, 8.0F));
-        goalSelector.addGoal(7, new RandomLookAroundGoal(this));
+        goalSelector.addGoal(5, new FarmGoal(this));
+        goalSelector.addGoal(6, new WaterAvoidingRandomStrollGoal(this, 0.6D));
+        goalSelector.addGoal(7, new LookAtPlayerGoal(this, Player.class, 8.0F));
+        goalSelector.addGoal(8, new RandomLookAroundGoal(this));
     }
 
     public LocalBehavior behavior() {
@@ -174,6 +176,9 @@ public final class CompanionEntity extends TamableAnimal {
             getNavigation().stop();
         } else {
             setOrderedToSit(false);
+            if (behavior == LocalBehavior.GUARD) {
+                setTarget(null);
+            }
         }
     }
 
@@ -328,11 +333,16 @@ public final class CompanionEntity extends TamableAnimal {
         if (behavior() != LocalBehavior.GUARD || isSafetyStopped() || !isWorkTime()) {
             return false;
         }
+        double chase = radius + 8.0D;
+        var owner = getOwner();
+        if (owner != null && owner.level().dimension().equals(level.dimension())
+                && owner.distanceToSqr(target) <= chase * chase) {
+            return true;
+        }
         BlockPos homePos = homeBlockPos().orElse(null);
         if (homePos == null || !level.dimension().equals(homeDimension().orElse(null))) {
             return true;
         }
-        double chase = radius + 8.0D;
         return distanceToSqr(Vec3.atCenterOf(homePos)) <= chase * chase;
     }
 

@@ -24,5 +24,6 @@ rootProject.name = 'TouhouLittleMaidMini'
 
 include 'core'
 include 'mcp'
+include 'llm'
 include 'fabric'
 include 'neoforge'

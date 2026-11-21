@@ -71,6 +71,12 @@ public final class CompanionScreen extends AbstractContainerScreen<CompanionMenu
                 .bounds(x + 132, y + 1, 36, 14).build());
         copyButton.setTooltip(net.minecraft.client.gui.components.Tooltip.create(
                 Component.translatable("gui.tlmm.mcp.copy_tooltip")));
+        Button aiButton = addRenderableWidget(Button.builder(
+                        Component.translatable("gui.tlmm.ai.short"),
+                        ignored -> minecraft.gui.setScreen(new LlmConfigScreen()))
+                .bounds(x + 88, y + 1, 40, 14).build());
+        aiButton.setTooltip(net.minecraft.client.gui.components.Tooltip.create(
+                Component.translatable("gui.tlmm.ai.settings")));
 
         behaviorButton = addRenderableWidget(Button.builder(behaviorLabel(),
                         ignored -> press(CompanionMenu.BUTTON_CYCLE_BEHAVIOR))

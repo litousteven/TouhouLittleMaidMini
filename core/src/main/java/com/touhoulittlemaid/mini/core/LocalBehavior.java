@@ -15,7 +15,10 @@ public enum LocalBehavior {
     FOLLOW("follow"),
 
     /** Stay near home and defend the owner and self from hostile targets. */
-    GUARD("guard");
+    GUARD("guard"),
+
+    /** Work near home: harvest mature crops and replant them from carried seeds. */
+    FARM("farm");
 
     private final String id;
 

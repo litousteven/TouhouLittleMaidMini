@@ -50,10 +50,14 @@ public final class TlmmFabric implements ModInitializer {
                 com.touhoulittlemaid.mini.fabric.runtime.AgentWatchdog::tick);
         net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents.END_SERVER_TICK.register(
                 ServerDiagnostics::tick);
+        net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents.END_SERVER_TICK.register(
+                com.touhoulittlemaid.mini.fabric.runtime.LlmRuntime::tick);
         ServerLifecycleEvents.SERVER_STARTED.register(server -> {
             int saveVersion = M0SavedData.get(server).value();
             LOGGER.info("[m0] saved-data baseline value={}", saveVersion);
             CompanionConfigs.load();
+            com.touhoulittlemaid.mini.fabric.config.LlmConfigs.load();
+            com.touhoulittlemaid.mini.fabric.runtime.LlmRuntime.install(server);
             TOKEN_STORE.restore(TokenSavedData.get(server).toPersisted());
             EventBus events = new EventBus();
             Path logDirectory = FabricLoader.getInstance().getGameDir().resolve("logs");
@@ -83,6 +87,8 @@ public final class TlmmFabric implements ModInitializer {
                 eventLog = null;
             }
             CompanionConfigs.reset();
+            com.touhoulittlemaid.mini.fabric.config.LlmConfigs.reset();
+            com.touhoulittlemaid.mini.fabric.runtime.LlmRuntime.reset();
             ServerDiagnostics.reset();
             state.set(PlatformState.starting(MOD_VERSION, MINECRAFT_VERSION));
         });

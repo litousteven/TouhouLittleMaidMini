@@ -157,7 +157,8 @@ public final class CompanionMenu extends AbstractContainerMenu {
         return switch (current) {
             case STAY -> LocalBehavior.FOLLOW;
             case FOLLOW -> LocalBehavior.GUARD;
-            case GUARD -> LocalBehavior.STAY;
+            case GUARD -> LocalBehavior.FARM;
+            case FARM -> LocalBehavior.STAY;
         };
     }
 

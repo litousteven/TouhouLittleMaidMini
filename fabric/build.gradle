@@ -25,6 +25,7 @@ dependencies {
     implementation "net.fabricmc.fabric-api:fabric-api:${fabric_version}"
     implementation project(':core')
     implementation project(':mcp')
+    implementation project(':llm')
     compileOnly fabricApi.module('fabric-gametest-api-v1', fabric_version)
     compileOnly fabricApi.module('fabric-client-gametest-api-v1', fabric_version)
     localRuntime fabricApi.module('fabric-gametest-api-v1', fabric_version)
@@ -54,6 +55,7 @@ configurations {
 dependencies {
     bundledLibrary project(':core')
     bundledLibrary project(':mcp')
+    bundledLibrary project(':llm')
 }
 
 tasks.named('jar', Jar) {
@@ -75,7 +77,8 @@ tasks.register('verifyPackagedMod') {
     def outputDir = layout.buildDirectory.dir('libs')
     inputs.dir(outputDir)
     doLast {
-        def required = ['com/touhoulittlemaid/mini/core/', 'com/touhoulittlemaid/mini/mcp/']
+        def required = ['com/touhoulittlemaid/mini/core/', 'com/touhoulittlemaid/mini/mcp/',
+                        'com/touhoulittlemaid/mini/llm/']
         def jars = fileTree(outputDir) { include '*.jar' }.files.findAll { jar ->
             !jar.name.endsWith('-sources.jar') && !jar.name.endsWith('-javadoc.jar') && !jar.name.endsWith('-dev.jar')
         }
