@@ -1,0 +1,233 @@
+package com.touhoulittlemaid.mini.fabric.plan;
+
+import com.touhoulittlemaid.mini.core.plan.FailureCodes;
+import com.touhoulittlemaid.mini.core.plan.ModuleRegistry;
+import com.touhoulittlemaid.mini.core.plan.ModuleResult;
+import com.touhoulittlemaid.mini.core.plan.ParsedPlan;
+import com.touhoulittlemaid.mini.core.plan.Plan;
+import com.touhoulittlemaid.mini.core.plan.PlanGate;
+import com.touhoulittlemaid.mini.core.plan.PlanListener;
+import com.touhoulittlemaid.mini.core.plan.PlanRunner;
+import com.touhoulittlemaid.mini.fabric.entity.CompanionEntity;
+import com.touhoulittlemaid.mini.fabric.runtime.CompanionRuntimeState;
+
+import java.util.Map;
+import java.util.Optional;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicLong;
+
+import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
+import net.minecraft.server.MinecraftServer;
+
+/**
+ * Owns running plans and drives them once per server tick.
+ *
+ * <p>A session is one companion running one plan. Submission is gated once, at the door;
+ * after that every tick costs a bounded amount of work and publishes events on the existing
+ * bus, so an Agent watching {@code companion_wait_events} sees plan progress without a new
+ * tool.
+ */
+public final class PlanRuntime {
+
+    private static final Map<UUID, Session> ACTIVE = new ConcurrentHashMap<>();
+    private static final AtomicLong IDS = new AtomicLong();
+
+    private PlanRuntime() {
+    }
+
+    public static void register() {
+        ServerTickEvents.END_SERVER_TICK.register(PlanRuntime::onServerTick);
+    }
+
+    public record SubmitResult(boolean ok, String code, String message, String planId) {
+    }
+
+    /** Validates and starts a plan for one companion. Must run on the server thread. */
+    public static SubmitResult submit(CompanionEntity companion, ParsedPlan parsed,
+            PlanGate.Policy policy) {
+        ModuleRegistry registry = FabricModules.registry();
+        PlanGate.Result gate = new PlanGate(registry, policy).check(parsed);
+        if (!gate.ok()) {
+            return new SubmitResult(false, gate.code(), gate.message(), "");
+        }
+        Session existing = ACTIVE.get(companion.getUUID());
+        if (existing != null && existing.runner.state() == PlanRunner.State.RUNNING) {
+            return new SubmitResult(false, FailureCodes.BUSY,
+                    "companion is already running plan " + existing.planId, existing.planId);
+        }
+
+        String planId = "plan-" + IDS.incrementAndGet();
+        FabricModuleContext context = new FabricModuleContext(companion, planId);
+        FabricPredicates predicates = new FabricPredicates(context);
+        Session session = new Session(planId, companion, context);
+        PlanRunner runner = new PlanRunner(parsed.plan(), registry, context, predicates,
+                new EventPublisher(session));
+        predicates.attach(runner);
+        session.runner = runner;
+
+        ACTIVE.put(companion.getUUID(), session);
+        try {
+            runner.start();
+        } catch (RuntimeException exception) {
+            ACTIVE.remove(companion.getUUID());
+            return new SubmitResult(false, FailureCodes.INTERRUPTED,
+                    "plan failed to start: " + exception.getMessage(), planId);
+        }
+        if (runner.state() != PlanRunner.State.RUNNING) {
+            ACTIVE.remove(companion.getUUID());
+        }
+        return new SubmitResult(true, "started", "plan started", planId);
+    }
+
+    public static boolean cancel(UUID companionId, String reason) {
+        Session session = ACTIVE.remove(companionId);
+        if (session == null) {
+            return false;
+        }
+        session.runner.cancel(reason);
+        return true;
+    }
+
+    public static Optional<String> activePlanId(UUID companionId) {
+        Session session = ACTIVE.get(companionId);
+        return session == null ? Optional.empty() : Optional.of(session.planId);
+    }
+
+    public static boolean isRunning(UUID companionId) {
+        Session session = ACTIVE.get(companionId);
+        return session != null && session.runner.state() == PlanRunner.State.RUNNING;
+    }
+
+    public static int activeCount() {
+        return ACTIVE.size();
+    }
+
+    /** Stops everything, used when the server stops so no session outlives the world. */
+    public static void cancelAll(String reason) {
+        for (UUID id : ACTIVE.keySet()) {
+            cancel(id, reason);
+        }
+    }
+
+    private static void onServerTick(MinecraftServer server) {
+        if (ACTIVE.isEmpty()) {
+            return;
+        }
+        for (Map.Entry<UUID, Session> entry : ACTIVE.entrySet()) {
+            Session session = entry.getValue();
+            try {
+                if (session.runner.state() != PlanRunner.State.RUNNING) {
+                    ACTIVE.remove(entry.getKey(), session);
+                    continue;
+                }
+                CompanionEntity companion = session.companion;
+                if (!companion.isAlive() || companion.isRemoved()) {
+                    session.runner.cancel("companion is gone");
+                    ACTIVE.remove(entry.getKey(), session);
+                    continue;
+                }
+                session.runner.tick();
+                if (session.runner.state() != PlanRunner.State.RUNNING) {
+                    ACTIVE.remove(entry.getKey(), session);
+                }
+            } catch (RuntimeException exception) {
+                session.runner.cancel("plan tick failed: " + exception.getClass().getSimpleName());
+                ACTIVE.remove(entry.getKey(), session);
+                CompanionRuntimeState.publish(session.companion.getUUID(), "plan_error",
+                        "{\"plan_id\":\"" + session.planId + "\",\"code\":\"interrupted\"}");
+            }
+        }
+    }
+
+    private static final class Session {
+
+        final String planId;
+        final CompanionEntity companion;
+        final FabricModuleContext context;
+        PlanRunner runner;
+
+        Session(String planId, CompanionEntity companion, FabricModuleContext context) {
+            this.planId = planId;
+            this.companion = companion;
+            this.context = context;
+        }
+    }
+
+    /** Turns runner callbacks into bus events; no second notification path. */
+    private static final class EventPublisher implements PlanListener {
+
+        private final Session session;
+
+        EventPublisher(Session session) {
+            this.session = session;
+        }
+
+        @Override
+        public void planStarted(Plan plan) {
+            publish("plan_started", "{\"plan_id\":" + quote(session.planId)
+                    + ",\"goal\":" + quote(plan.goal())
+                    + ",\"steps\":" + plan.stepCount() + "}");
+        }
+
+        @Override
+        public void stepStarted(int index, String module) {
+            publish("step_started", "{\"plan_id\":" + quote(session.planId)
+                    + ",\"step\":" + index + ",\"module\":" + quote(module) + "}");
+        }
+
+        @Override
+        public void stepFinished(int index, String module, ModuleResult result, boolean skipped) {
+            publish("step_finished", "{\"plan_id\":" + quote(session.planId)
+                    + ",\"step\":" + index + ",\"module\":" + quote(module)
+                    + ",\"ok\":" + (skipped || result.isSuccess())
+                    + ",\"skipped\":" + skipped
+                    + ",\"code\":" + quote(skipped ? "skipped" : result.code())
+                    + ",\"message\":" + quote(result.message()) + "}");
+        }
+
+        @Override
+        public void planFinished(PlanRunner.Summary summary) {
+            publish("plan_finished", "{\"plan_id\":" + quote(session.planId)
+                    + ",\"ok\":" + summary.ok()
+                    + ",\"state\":" + quote(summary.state().name())
+                    + ",\"code\":" + quote(summary.code())
+                    + ",\"message\":" + quote(summary.message())
+                    + ",\"completed\":" + summary.stepsCompleted()
+                    + ",\"failed\":" + summary.stepsFailed()
+                    + ",\"skipped\":" + summary.stepsSkipped()
+                    + ",\"actions\":" + summary.actions()
+                    + ",\"ticks\":" + summary.ticks() + "}");
+        }
+
+        private void publish(String kind, String data) {
+            CompanionRuntimeState.publish(session.companion.getUUID(), kind, data);
+        }
+    }
+
+    private static String quote(String text) {
+        if (text == null) {
+            return "\"\"";
+        }
+        StringBuilder out = new StringBuilder(text.length() + 2);
+        out.append('"');
+        for (int index = 0; index < text.length(); index++) {
+            char character = text.charAt(index);
+            switch (character) {
+                case '"' -> out.append("\\\"");
+                case '\\' -> out.append("\\\\");
+                case '\n' -> out.append("\\n");
+                case '\r' -> out.append("\\r");
+                case '\t' -> out.append("\\t");
+                default -> {
+                    if (character < 0x20) {
+                        out.append(String.format("\\u%04x", (int) character));
+                    } else {
+                        out.append(character);
+                    }
+                }
+            }
+        }
+        return out.append('"').toString();
+    }
+}

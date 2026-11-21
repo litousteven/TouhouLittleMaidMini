@@ -51,6 +51,16 @@ public final class CompanionCommands {
                                                 StringArgumentType.getString(context, "behavior")))))
                         .then(Commands.literal("diag")
                                 .executes(context -> diag(context.getSource())))
+                        .then(Commands.literal("debug")
+                                .then(Commands.literal("plan")
+                                        .then(Commands.argument("json",
+                                                        StringArgumentType.greedyString())
+                                                .executes(context -> submitPlan(
+                                                        context.getSource(),
+                                                        StringArgumentType.getString(context,
+                                                                "json")))))
+                                .then(Commands.literal("plancancel")
+                                        .executes(context -> cancelPlan(context.getSource()))))
                         .then(Commands.literal("auth")
                                 .then(Commands.literal("allow")
                                         .then(Commands.argument("id", StringArgumentType.word())
@@ -361,6 +371,59 @@ public final class CompanionCommands {
         source.sendSuccess(() -> Component.literal("LLM enabled=" + config.enabled()
                 + " model=" + config.model() + " token=" + (token ? "set" : "missing")), false);
         return 1;
+    }
+
+    private static int submitPlan(net.minecraft.commands.CommandSourceStack source, String json) {
+        if (source.getPlayer() == null) {
+            source.sendFailure(Component.translatableWithFallback("command.tlmm.player_only",
+                    "%s must be run by a player", "tlmm debug plan"));
+            return 0;
+        }
+        List<CompanionEntity> companions = ownedCompanions(source);
+        if (companions.isEmpty()) {
+            source.sendFailure(Component.translatableWithFallback(
+                    "command.tlmm.plan.none", "No owned companion nearby to run a plan"));
+            return 0;
+        }
+        com.touhoulittlemaid.mini.core.plan.ParsedPlan parsed;
+        try {
+            parsed = com.touhoulittlemaid.mini.core.plan.PlanJson.parse(json);
+        } catch (com.touhoulittlemaid.mini.core.plan.PlanFormatException exception) {
+            source.sendFailure(Component.translatableWithFallback(
+                    "command.tlmm.plan.rejected", "Plan rejected [%s]: %s",
+                    exception.code(), exception.getMessage()));
+            return 0;
+        }
+        var result = com.touhoulittlemaid.mini.fabric.plan.PlanRuntime.submit(companions.get(0),
+                parsed, com.touhoulittlemaid.mini.core.plan.PlanGate.Policy.command());
+        if (!result.ok()) {
+            source.sendFailure(Component.translatableWithFallback(
+                    "command.tlmm.plan.rejected", "Plan rejected [%s]: %s",
+                    result.code(), result.message()));
+            return 0;
+        }
+        source.sendSuccess(() -> Component.translatableWithFallback(
+                "command.tlmm.plan.started", "Plan %s started with %s steps",
+                result.planId(), parsed.plan().stepCount()), false);
+        return 1;
+    }
+
+    private static int cancelPlan(net.minecraft.commands.CommandSourceStack source) {
+        List<CompanionEntity> companions = ownedCompanions(source);
+        boolean cancelled = false;
+        for (CompanionEntity companion : companions) {
+            cancelled |= com.touhoulittlemaid.mini.fabric.plan.PlanRuntime
+                    .cancel(companion.getUUID(), "cancelled by command");
+        }
+        int count = cancelled ? 1 : 0;
+        if (!cancelled) {
+            source.sendFailure(Component.translatableWithFallback(
+                    "command.tlmm.plan.none", "No owned companion nearby to run a plan"));
+            return 0;
+        }
+        source.sendSuccess(() -> Component.translatableWithFallback(
+                "command.tlmm.plan.cancelled", "Plan cancelled"), false);
+        return count;
     }
 
     private static List<CompanionEntity> ownedCompanions(net.minecraft.commands.CommandSourceStack source) {

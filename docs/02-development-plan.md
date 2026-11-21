@@ -14,8 +14,8 @@
 | Fabric Loader / API | `0.20.1` / `0.165.2+26.3` |
 | Java | `25`（构建与运行同一 toolchain） |
 | 已发布 | tag `v0.1.0-beta`（被动 MCP） |
-| 工作区 | M5 双脑切片已实现并验证，未打新 tag |
-| 验证基线 | `:core:test :mcp:test :llm:test` 通过；`verifyTranslations` 74 键一致；50 个 GameTest 通过；客户端 GameTest 截图已人工检查 |
+| 工作区 | M6.0–M6.2 已实现并验证，未打新 tag；M6.3 起未开始 |
+| 验证基线 | `:core:test :mcp:test :llm:test` 通过；`verifyTranslations` 78 键一致；77 个 GameTest 通过 |
 
 `0.1.0-beta` 与本工作区的差别只有一处：M5 增加了确定性基础脑、游戏内模型配置和主动
 请求，但模型仍只能切换行为枚举，不能编排多步动作。
@@ -32,6 +32,15 @@
 | `M3` | 通用动作与安全 | 通过。上下文过滤、交互、权限、审计、断线降级成立；农作与拾取由 Skill 组合完成 | `docs/validation/M3.md` |
 | `M4` | 客户端体验与发布准备 | 通过。模型、动画、双语界面、许可清单、浸泡脚本；24 小时浸泡由操作者执行 | `docs/validation/M4.md` |
 | `M5` | 双脑切片 | 通过。基础脑 + AI 设置页 + 主动请求 + Skill 提案 | `docs/validation/M5.md` |
+| `M6.0` | 模块框架 | 通过。`Plan` 静态校验、逐 tick 执行、事件流、`/tlmm debug plan` | `docs/validation/M6.0.md` |
+| `M6.1` | 身体能力 | 通过。挖掘/放置/容器/槽位搬运/合成/熔炼 + 工具前置 | `docs/validation/M6.1.md` |
+| `M6.2` | 模块库 | 通过。区域农作、按标签采集、砍树、箱子整理 | `docs/validation/M6.2.md` |
+| `M6.3` | 语义底座 | 未开始 | — |
+| `M6.3b` | 标注闭环 | 未开始 | — |
+| `M6.4` | 客户端脑 | 未开始 | — |
+| `M6.5` | 自主模式 | 未开始 | — |
+| `M6.6` | 学习闭环 | 未开始 | — |
+| `M6.7` | 发布验收 | 未开始 | — |
 
 `M0` 至 `M4` 的逐项流水（环境重建、依赖结论、客户端 GameTest 阻塞根因）保留在
 [`M0_PROGRESS.md`](../M0_PROGRESS.md)，不再在本文件重复。

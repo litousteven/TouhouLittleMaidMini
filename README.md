@@ -52,12 +52,15 @@ NeoForge 保留为 Fabric 行为边界稳定后的后续适配，不阻塞首个
 - **学习产物**：模型只能产出可审阅的 Skill/计划模板，不进行模型训练，不生成代码。
 - **MCP 仍保留**：外部 Agent CLI 继续是受支持的驱动方式，与客户端计划落到同一套动作入口。
 
-当前状态：`M5` 切片已落地（`farm` 行为、AI 设置页、主动请求、Skill 提案）；`M6` 只有
-设计，尚未开始实现，建造/开垦/工作台操作在 `0.1.0-beta` 上不可用。
+当前状态：`M5` 切片已落地（`farm` 行为、AI 设置页、主动请求、Skill 提案）；`M6.0`–`M6.2`
+已落地（有界计划框架、挖掘/放置/容器/合成/熔炼、区域农作/采集/整理），77 个 GameTest
+通过。`M6.3` 起的语义标签、客户端脑、自主模式与学习闭环尚未实现，建造/开垦仍需显式计划
+（`till_area` 已可用），客户端对话与自主找活不可用。
 
 设计真源见 [`docs/10-autonomy-and-scripting.md`](docs/10-autonomy-and-scripting.md) 与
 [`docs/01-technical-design.md`](docs/01-technical-design.md)；`M5` 验收见
-[`docs/validation/M5.md`](docs/validation/M5.md)。
+[`docs/validation/M5.md`](docs/validation/M5.md)，`M6.0`–`M6.2` 见
+`docs/validation/M6.0.md`、`M6.1.md`、`M6.2.md`。
 
 ## 快速开始（30 分钟）
 

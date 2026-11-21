@@ -72,5 +72,9 @@
   "command.tlmm.diag.header": "Companions %s   MSPT avg %s / max %s   Heap %s MB   Threads %s",
   "command.tlmm.diag.mcp": "MCP %s   endpoint %s   events %s",
   "command.tlmm.diag.on": "on",
-  "command.tlmm.diag.off": "off"
+  "command.tlmm.diag.off": "off",
+  "command.tlmm.plan.started": "Plan %s started with %s steps",
+  "command.tlmm.plan.rejected": "Plan rejected [%s]: %s",
+  "command.tlmm.plan.none": "No owned companion nearby to run a plan",
+  "command.tlmm.plan.cancelled": "Plan cancelled"
 }

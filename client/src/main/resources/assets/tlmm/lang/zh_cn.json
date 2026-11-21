@@ -72,5 +72,9 @@
   "command.tlmm.diag.header": "同伴 %s   MSPT 平均 %s / 最大 %s   堆 %s MB   线程 %s",
   "command.tlmm.diag.mcp": "MCP %s   端点 %s   事件 %s",
   "command.tlmm.diag.on": "开启",
-  "command.tlmm.diag.off": "关闭"
+  "command.tlmm.diag.off": "关闭",
+  "command.tlmm.plan.started": "计划 %s 已开始，共 %s 步",
+  "command.tlmm.plan.rejected": "计划被拒绝 [%s]：%s",
+  "command.tlmm.plan.none": "附近没有可执行计划的同伴",
+  "command.tlmm.plan.cancelled": "计划已取消"
 }

@@ -9,6 +9,10 @@ java {
 }
 
 dependencies {
+    // Plan JSON is parsed here so the client quick check, the server gate and the tests
+    // all read plans through one codec. Gson is already provided at runtime by Minecraft.
+    api 'com.google.code.gson:gson:2.14.0'
+
     testImplementation platform('org.junit:junit-bom:5.11.4')
     testImplementation 'org.junit.jupiter:junit-jupiter'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'

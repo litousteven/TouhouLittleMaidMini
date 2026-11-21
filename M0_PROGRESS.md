@@ -318,6 +318,26 @@ M2 结论：**Go**。协议、认证、作用域、审计、幂等、事件、�
 `.\scripts\soak.ps1 -Minutes 1440 -IntervalSeconds 60` 并保存 CSV；短时验证不能替代该门禁。
 首次客户端启动若出现 `0xC0000005`，删除客户端缓存后重试；本机第二次运行已稳定通过。
 
+## M6 进度：0.2 模块框架与模块库（M6.0–M6.2）
+
+验收记录：[`docs/validation/M6.0.md`](docs/validation/M6.0.md)、
+[`docs/validation/M6.1.md`](docs/validation/M6.1.md)、
+[`docs/validation/M6.2.md`](docs/validation/M6.2.md)。
+
+- `core/plan`：`ActionModule`、`ModuleSpec`、`Plan`、`PlanJson`、`PlanGate`、
+  `PlanRunner`、`PlanPredicate`、统一失败码；计划体积 16KB、24 步、400 动作、
+  12000 tick、128 破坏的上限全部可测。
+- `fabric/plan`：`PlanRuntime` 每 tick 推进一个计划并把
+  `plan_started / step_started / step_finished / plan_finished` 写入现有事件总线；
+  `/tlmm debug plan <json>`、`/tlmm debug plancancel`。
+- 模块：`say`、`goto`、`dig_block`、`place_block`、`withdraw_items`、`deposit_items`、
+  `move_slot`、`craft_item`、`smelt_items`、`harvest_area`、`plant_area`、`till_area`、
+  `mine_material`、`chop_tree`、`tidy_chests`，共 15 个。
+- 验证：`:core:test` 通过；`:fabric:runGameTestServer` → `All 77 required tests passed`；
+  `verifyTranslations` 78 键一致。
+- 未开始：`M6.3` 语义底座、`M6.3b` 标注闭环、`M6.4` 客户端脑、`M6.5` 自主模式、
+  `M6.6` 学习闭环、`M6.7` 发布验收。
+
 ## 恢复工作
 
 重启后先读取本文件。Windows 下从仓库根目录执行：

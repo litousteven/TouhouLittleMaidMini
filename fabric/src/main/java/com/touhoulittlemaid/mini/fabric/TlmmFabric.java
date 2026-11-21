@@ -52,6 +52,8 @@ public final class TlmmFabric implements ModInitializer {
                 ServerDiagnostics::tick);
         net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents.END_SERVER_TICK.register(
                 com.touhoulittlemaid.mini.fabric.runtime.LlmRuntime::tick);
+        // Plans advance once per tick; each step is bounded, so this never blocks the world.
+        com.touhoulittlemaid.mini.fabric.plan.PlanRuntime.register();
         ServerLifecycleEvents.SERVER_STARTED.register(server -> {
             int saveVersion = M0SavedData.get(server).value();
             LOGGER.info("[m0] saved-data baseline value={}", saveVersion);
@@ -81,6 +83,7 @@ public final class TlmmFabric implements ModInitializer {
             TokenSavedData.get(server).replace(TOKEN_STORE.export());
         });
         ServerLifecycleEvents.SERVER_STOPPED.register(server -> {
+            com.touhoulittlemaid.mini.fabric.plan.PlanRuntime.cancelAll("server stopped");
             stopMcp();
             if (eventLog != null) {
                 eventLog.close();
