@@ -47,6 +47,7 @@ public final class TlmmFabric implements ModInitializer {
         FabricContent.register();
         CompanionCommands.register();
         com.touhoulittlemaid.mini.fabric.network.KnowledgeNetworking.register();
+        com.touhoulittlemaid.mini.fabric.network.LearningNetworking.register();
         // Client brain boundary: payload codecs, receivers and the plan progress tick.
         com.touhoulittlemaid.mini.fabric.agent.AgentService.register();
         net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents.END_SERVER_TICK.register(
@@ -58,6 +59,8 @@ public final class TlmmFabric implements ModInitializer {
         // Autonomy: a deterministic scan whose output the model may only choose from.
         com.touhoulittlemaid.mini.fabric.autonomy.PlacementTracker.register();
         com.touhoulittlemaid.mini.fabric.autonomy.Director.register();
+        // Learning: successful plans become reviewable proposals, never executable code.
+        com.touhoulittlemaid.mini.fabric.learning.TemplateService.register();
         ServerLifecycleEvents.SERVER_STARTED.register(server -> {
             int saveVersion = M0SavedData.get(server).value();
             LOGGER.info("[m0] saved-data baseline value={}", saveVersion);
@@ -67,6 +70,11 @@ public final class TlmmFabric implements ModInitializer {
             com.touhoulittlemaid.mini.fabric.semantic.KnowledgeService.load(
                     com.touhoulittlemaid.mini.fabric.semantic.SemanticService
                             .knowledgeDirectory(FabricLoader.getInstance().getGameDir()));
+            Path tlmmConfig = FabricLoader.getInstance().getGameDir().resolve("config/tlmm");
+            com.touhoulittlemaid.mini.fabric.learning.TemplateService.load(
+                    tlmmConfig.resolve("learning"));
+            com.touhoulittlemaid.mini.fabric.skill.SkillService.load(
+                    tlmmConfig.resolve("skills"));
             com.touhoulittlemaid.mini.fabric.agent.AgentService.install(server);
             TOKEN_STORE.restore(TokenSavedData.get(server).toPersisted());
             EventBus events = new EventBus();
@@ -103,6 +111,8 @@ public final class TlmmFabric implements ModInitializer {
             com.touhoulittlemaid.mini.fabric.autonomy.Director.reset();
             com.touhoulittlemaid.mini.fabric.autonomy.AutonomyConfig.reset();
             com.touhoulittlemaid.mini.fabric.autonomy.PlacementTracker.clear();
+            com.touhoulittlemaid.mini.fabric.learning.TemplateService.reset();
+            com.touhoulittlemaid.mini.fabric.skill.SkillService.reset();
             ServerDiagnostics.reset();
             state.set(PlatformState.starting(MOD_VERSION, MINECRAFT_VERSION));
         });

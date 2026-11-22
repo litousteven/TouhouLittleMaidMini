@@ -61,6 +61,10 @@
   模块库没有「直接交给玩家」的动作。
 - 机会识别不读领地模组的 claim 数据；保护区仍靠家半径、`#tlmm:protected`、
   `#tlmm:keep` 与容器归属规则。
+- 学习产物只记录模块序列与参数占位符，不做模型训练、不生成代码；参数绑定目前只有
+  默认值与显式 Map，没有用自然语言在聊天里填参的交互。
+- 内置 Skill 首次启动时物化到 `config/tlmm/skills/builtin/`，不是从 jar 资源直接读取；
+  升级不会自动覆盖玩家改过的内置副本。Skill 正文与附属文件按需拉取，单次上限 256KB。
 - Agent 断线超过 `disconnect_grace_seconds` 后会停止导航并发 `mcp_disconnected` 事件，
   然后进入配置的安全模式（默认 `stay`）。
 

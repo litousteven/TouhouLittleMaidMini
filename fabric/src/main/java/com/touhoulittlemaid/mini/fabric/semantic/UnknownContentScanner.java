@@ -176,7 +176,7 @@ public final class UnknownContentScanner {
             return;
         }
         String id = FabricRealFacts.idOf(stack.getItem());
-        if (id.isEmpty() || SemanticService.resolve(stack).isKnown()) {
+        if (id.isEmpty() || SemanticService.resolve(stack).isKnown() || explainedByBlock(id)) {
             return;
         }
         Map<String, Object> data = new LinkedHashMap<>();
@@ -191,6 +191,22 @@ public final class UnknownContentScanner {
         found.putIfAbsent(KnowledgeCandidate.key(SemanticKind.ITEM, id),
                 KnowledgeCandidate.of(id, SemanticKind.ITEM,
                         SemanticService.rawTags(SemanticKind.ITEM, id), data));
+    }
+
+    /**
+     * An item whose id is also a known block (wheat, cactus, ...) is already explained by the
+     * block-side resolution. Without this, a crop item sitting in a nearby chest becomes an
+     * "unknown content" question about a crop the semantic layer already knows.
+     */
+    private static boolean explainedByBlock(String itemId) {
+        try {
+            var block = net.minecraft.core.registries.BuiltInRegistries.BLOCK.getValue(
+                    net.minecraft.resources.Identifier.parse(itemId));
+            return block != null && !block.defaultBlockState().isAir()
+                    && SemanticService.resolve(block.defaultBlockState()).isKnown();
+        } catch (RuntimeException exception) {
+            return false;
+        }
     }
 
     private static void addBlock(Map<String, KnowledgeCandidate> found, BlockState state) {

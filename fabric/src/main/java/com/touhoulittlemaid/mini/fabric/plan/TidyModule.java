@@ -136,6 +136,16 @@ public final class TidyModule implements ActionModule {
                 + " container(s) now empty", Map.of("moves", performed, "empty", empty));
     }
 
+    /**
+     * M6.7 test hook: nanoseconds for one deterministic planning pass over N containers.
+     * Planning is the only unbounded part of a tidy step; each tick performs exactly one move.
+     */
+    public static long planNanos(List<Container> containers) {
+        long start = System.nanoTime();
+        plan(containers);
+        return System.nanoTime() - start;
+    }
+
     /** Chooses a destination per source stack, keeping one container free as a buffer. */
     private static Deque<Move> plan(List<Container> containers) {
         Deque<Move> moves = new ArrayDeque<>();

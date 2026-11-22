@@ -4,6 +4,7 @@ import com.touhoulittlemaid.mini.client.agent.AgentLoop;
 import com.touhoulittlemaid.mini.client.agent.KnowledgeAnnotator;
 import com.touhoulittlemaid.mini.client.menu.CompanionScreen;
 import com.touhoulittlemaid.mini.client.menu.KnowledgeScreen;
+import com.touhoulittlemaid.mini.client.menu.TemplateScreen;
 import com.touhoulittlemaid.mini.client.render.CompanionModel;
 import com.touhoulittlemaid.mini.client.render.CompanionRenderer;
 import com.touhoulittlemaid.mini.client.render.DebugCompanionRenderer;
@@ -11,6 +12,7 @@ import com.touhoulittlemaid.mini.fabric.content.FabricContent;
 import com.touhoulittlemaid.mini.fabric.menu.CompanionMenus;
 import com.touhoulittlemaid.mini.fabric.network.AgentClientPayloads;
 import com.touhoulittlemaid.mini.fabric.network.KnowledgeViewPayload;
+import com.touhoulittlemaid.mini.fabric.network.TemplateViewPayload;
 
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
@@ -58,6 +60,15 @@ public final class TlmmFabricClient implements ClientModInitializer {
         ClientPlayNetworking.registerGlobalReceiver(AgentClientPayloads.Notice.TYPE,
                 (payload, context) -> context.client().execute(
                         () -> AgentLoop.get().onNotice(payload)));
+        ClientPlayNetworking.registerGlobalReceiver(TemplateViewPayload.TYPE,
+                (payload, context) -> context.client().execute(() -> {
+                    Minecraft client = Minecraft.getInstance();
+                    if (payload.open()) {
+                        client.gui.setScreen(new TemplateScreen(payload));
+                    } else if (client.gui.screen() instanceof TemplateScreen screen) {
+                        screen.update(payload);
+                    }
+                }));
         ClientPlayNetworking.registerGlobalReceiver(AgentClientPayloads.Opportunities.TYPE,
                 (payload, context) -> context.client().execute(
                         () -> AgentLoop.get().onOpportunities(payload)));

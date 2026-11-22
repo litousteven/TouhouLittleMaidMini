@@ -132,5 +132,18 @@
   "command.tlmm.autonomy.no_companion": "No companion with that name",
   "command.tlmm.ai.pause": "Autonomy paused for %s minutes (until %s)",
   "command.tlmm.ai.resume": "Autonomy resumed",
-  "command.tlmm.ai.status": "Autonomy: %s"
+  "command.tlmm.ai.status": "Autonomy: %s",
+  "command.tlmm.template.list": "Proposals %s   templates %s   trusted %s",
+  "command.tlmm.template.failed": "Template action refused (%s): %s",
+  "command.tlmm.template.player": "This command needs a player",
+  "command.tlmm.template.no_companion": "No companion nearby to run this template",
+  "gui.tlmm.template.title": "Learned plans",
+  "gui.tlmm.template.summary": "pending %s   templates %s   trusted %s",
+  "gui.tlmm.template.empty": "No proposals yet; successful plans will appear here",
+  "gui.tlmm.template.adopt": "Adopt",
+  "gui.tlmm.template.reject": "Reject",
+  "gui.tlmm.template.confirm": "Confirm",
+  "gui.tlmm.template.run": "Run",
+  "gui.tlmm.template.rollback": "Rollback",
+  "gui.tlmm.template.close": "Close"
 }

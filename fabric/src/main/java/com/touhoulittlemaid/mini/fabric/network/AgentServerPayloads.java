@@ -72,9 +72,14 @@ public final class AgentServerPayloads {
         }
     }
 
-    /** Requests a fresh observation; {@code category} is status, inventory or world. */
+    /**
+     * Requests a fresh observation. {@code category} is status, inventory, world,
+     * {@code skill:<name>} or {@code skill_file:<name>:<relative>}.
+     */
     public record ObservationRequest(String requestId, String category)
             implements CustomPacketPayload {
+
+        public static final int MAX_CATEGORY = 256;
 
         public static final Type<ObservationRequest> TYPE =
                 new Type<>(Identifier.parse("tlmm:agent_request_observation"));
@@ -82,8 +87,9 @@ public final class AgentServerPayloads {
         public static final StreamCodec<RegistryFriendlyByteBuf, ObservationRequest> STREAM_CODEC =
                 StreamCodec.of((buffer, payload) -> {
                     buffer.writeUtf(payload.requestId(), MAX_TEXT);
-                    buffer.writeUtf(payload.category(), 32);
-                }, buffer -> new ObservationRequest(buffer.readUtf(MAX_TEXT), buffer.readUtf(32)));
+                    buffer.writeUtf(payload.category(), MAX_CATEGORY);
+                }, buffer -> new ObservationRequest(buffer.readUtf(MAX_TEXT),
+                        buffer.readUtf(MAX_CATEGORY)));
 
         @Override
         public Type<ObservationRequest> type() {

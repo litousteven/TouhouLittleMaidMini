@@ -54,6 +54,7 @@ public final class PlanRuntime {
     public static final String SOURCE_COMMAND = "command";
     public static final String SOURCE_CHAT = "chat";
     public static final String SOURCE_AUTONOMY = "autonomy";
+    public static final String SOURCE_TEMPLATE = "template";
 
     /** Called once per plan, after the runner stopped, on the server thread. */
     public interface CompletionListener {

@@ -132,5 +132,18 @@
   "command.tlmm.autonomy.no_companion": "没有叫这个名字的同伴",
   "command.tlmm.ai.pause": "已暂停自主行为 %s 分钟（至 %s）",
   "command.tlmm.ai.resume": "已恢复自主行为",
-  "command.tlmm.ai.status": "自主状态：%s"
+  "command.tlmm.ai.status": "自主状态：%s",
+  "command.tlmm.template.list": "待审提案 %s   模板 %s   已信任 %s",
+  "command.tlmm.template.failed": "模板操作被拒绝（%s）：%s",
+  "command.tlmm.template.player": "该命令需要玩家执行",
+  "command.tlmm.template.no_companion": "附近没有同伴可执行该模板",
+  "gui.tlmm.template.title": "已学习的计划",
+  "gui.tlmm.template.summary": "待审 %s   模板 %s   已信任 %s",
+  "gui.tlmm.template.empty": "还没有提案；成功的计划会出现在这里",
+  "gui.tlmm.template.adopt": "采纳",
+  "gui.tlmm.template.reject": "拒绝",
+  "gui.tlmm.template.confirm": "确认",
+  "gui.tlmm.template.run": "执行",
+  "gui.tlmm.template.rollback": "回滚",
+  "gui.tlmm.template.close": "关闭"
 }

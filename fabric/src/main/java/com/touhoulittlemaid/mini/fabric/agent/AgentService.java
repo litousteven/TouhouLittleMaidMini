@@ -200,6 +200,10 @@ public final class AgentService {
             result(player, payload.requestId(), false, submitted.code(), submitted.message());
             return;
         }
+        // A successful plan may earn a proposal once it finishes; keep the source text until
+        // the completion listener runs. Templates started from here are tagged separately.
+        com.touhoulittlemaid.mini.fabric.learning.TemplateService.remember(
+                submitted.planId(), json);
         if (autonomy) {
             // Tokens are client-reported: the server cannot see the model response. Use the
             // plan text as a floor so a modified client cannot report zero and evade the
@@ -247,8 +251,13 @@ public final class AgentService {
                     "{\"error\":\"rate_limited\"}"));
             return;
         }
-        send(player, new AgentClientPayloads.Observation(payload.requestId(),
-                AgentObserver.observe(companion, payload.category())));
+        String category = payload.category();
+        String json = category != null && (category.startsWith("skill:")
+                || category.startsWith("skill_file:"))
+                ? com.touhoulittlemaid.mini.fabric.skill.SkillService.observe(category)
+                : AgentObserver.observe(companion, category,
+                        com.touhoulittlemaid.mini.fabric.skill.SkillService.index().entries());
+        send(player, new AgentClientPayloads.Observation(payload.requestId(), json));
     }
 
     // ---- knowledge proposals ---------------------------------------------------------------

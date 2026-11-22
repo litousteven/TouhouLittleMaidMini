@@ -4,12 +4,14 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 
 import com.touhoulittlemaid.mini.core.semantic.SemanticTag;
+import com.touhoulittlemaid.mini.core.skill.SkillIndex;
 import com.touhoulittlemaid.mini.fabric.entity.CompanionEntity;
 import com.touhoulittlemaid.mini.fabric.plan.PlanRuntime;
 import com.touhoulittlemaid.mini.fabric.semantic.CropShape;
 import com.touhoulittlemaid.mini.fabric.semantic.SemanticService;
 
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 import net.minecraft.core.BlockPos;
@@ -38,6 +40,15 @@ public final class AgentObserver {
     }
 
     public static String observe(CompanionEntity companion, String category) {
+        return observe(companion, category, List.of());
+    }
+
+    /**
+     * Level 1 of Skill disclosure: only names and one-line descriptions ride along with a
+     * status observation. Bodies and attachments are separate, rate-limited requests.
+     */
+    public static String observe(CompanionEntity companion, String category,
+            List<SkillIndex.Entry> skills) {
         String mode = category == null || category.isBlank() ? "status" : category;
         JsonObject root = new JsonObject();
         root.add("companion", companionJson(companion));
@@ -52,6 +63,16 @@ public final class AgentObserver {
             root.add("nearby", nearbyJson(companion));
         }
         root.addProperty("mode", mode);
+        if ("status".equals(mode) && skills != null && !skills.isEmpty()) {
+            JsonArray index = new JsonArray();
+            for (SkillIndex.Entry entry : skills) {
+                JsonObject row = new JsonObject();
+                row.addProperty("name", entry.name());
+                row.addProperty("description", entry.description());
+                index.add(row);
+            }
+            root.add("skills", index);
+        }
         PlanRuntime.snapshot(companion.getUUID()).ifPresent(snapshot -> {
             JsonObject task = new JsonObject();
             task.addProperty("plan_id", snapshot.planId());

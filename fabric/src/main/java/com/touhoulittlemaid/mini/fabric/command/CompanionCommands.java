@@ -75,6 +75,7 @@ public final class CompanionCommands {
                         .then(KnowledgeCommands.node())
                         .then(AutonomyCommands.node())
                         .then(AiCommands.node())
+                        .then(LearningCommands.node())
                         .then(Commands.literal("mcp")
                                 .then(Commands.literal("token")
                                         .then(Commands.literal("create")

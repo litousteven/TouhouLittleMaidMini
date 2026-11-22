@@ -14,8 +14,8 @@
 | Fabric Loader / API | `0.20.1` / `0.165.2+26.3` |
 | Java | `25`（构建与运行同一 toolchain） |
 | 已发布 | tag `v0.1.0-beta`（被动 MCP） |
-| 工作区 | M6.0–M6.5 已实现并验证；M6.6 起未开始；未打新 tag |
-| 验证基线 | `:core:test :mcp:test :llm:test` 通过（262 个用例）；`verifyTranslations` 134 键一致；106 个 GameTest 通过；客户端 GameTest 含真实模型与自主回合 E2E |
+| 工作区 | M6.0–M6.7 实现完成、短时验收通过；24 小时浸泡与干净 VM 门禁未完成；未打新 tag |
+| 验证基线 | `:core:test :mcp:test :llm:test` 通过（276 个用例）；`verifyTranslations` 147 键一致；114 个 GameTest 通过；客户端 GameTest 含真实模型、自主回合与模板界面 E2E |
 
 `0.1.0-beta` 与本工作区的差别只有一处：M5 增加了确定性基础脑、游戏内模型配置和主动
 请求，但模型仍只能切换行为枚举，不能编排多步动作。
@@ -39,8 +39,8 @@
 | `M6.3b` | 标注闭环 | 通过。扫描、批次、校验注入、人工确认、审阅 UI、回滚、导出 | `docs/validation/M6.3b.md` |
 | `M6.4` | 客户端脑 | 通过。配置与凭据在客户端、9 个网络包、`AgentLoop`、Chat 与设置界面；服务端无 Key 无出站 | `docs/validation/M6.4.md` |
 | `M6.5` | 自主模式 | 通过。四档位、六类机会、导演仲裁、预算/熔断、`/tlmm ai pause`、客户端自主回合 | `docs/validation/M6.5.md` |
-| `M6.6` | 学习闭环 | 未开始 | — |
-| `M6.7` | 发布验收 | 未开始 | — |
+| `M6.6` | 学习闭环 | 通过。模板提案/审阅/回滚、监督→信任、失败降级、Skill 三级加载 | `docs/validation/M6.6.md` |
+| `M6.7` | 发布验收 | 实现与短时验收通过；**24 小时浸泡 / 干净 VM 门禁未完成，不宣称发布通过** | `docs/validation/M6.md` |
 
 `M0` 至 `M4` 的逐项流水（环境重建、依赖结论、客户端 GameTest 阻塞根因）保留在
 [`M0_PROGRESS.md`](../M0_PROGRESS.md)，不再在本文件重复。
