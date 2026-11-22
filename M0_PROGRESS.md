@@ -19,7 +19,8 @@
 ## Git 状态
 
 - 当前分支：`main`
-- 发布点：tag `v0.1.0-beta`，与 `gradle.properties` 的 `version` 一致
+- 当前发布点：tag `v0.1.1-beta`，与 `gradle.properties` 的 `version` 一致（首个 tag 为
+  `v0.1.0-beta`）
 - 发布流程：推送 `v*` tag 后由 `.github/workflows/release.yml` 构建并创建 GitHub
   Release；产物只有 Fabric jar，NeoForge 模块不随本版发布
 - 发布说明按版本存放于 `docs/releases/<tag>.md`，工作流缺少该文件时拒绝发布

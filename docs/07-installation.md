@@ -1,6 +1,6 @@
 # 安装与首次连接
 
-本文面向首次安装 `0.1.0-beta` 的玩家和服务器管理员。目标是：在干净环境中按本文
+本文面向首次安装 `0.1.1-beta` 的玩家和服务器管理员。目标是：在干净环境中按本文
 在 30 分钟内跑通 M2 验收场景（启动游戏、召唤同伴、Agent 通过 MCP 读取状态）。
 
 ## 1. 环境要求
@@ -18,7 +18,7 @@
 
 ## 2. 安装模组
 
-1. 从发布页下载 `touhou-little-maid-mini-fabric-26.3-0.1.0-beta.jar`。
+1. 从发布页下载 `touhou-little-maid-mini-fabric-26.3-0.1.1-beta.jar`。
 2. 放入客户端或服务端的 `mods/` 目录。
 3. 同时安装匹配版本的 Fabric Loader 与 Fabric API。
 4. 启动一次游戏或服务端。首次启动会生成：
@@ -61,26 +61,17 @@ $env:TLMM_MCP_TOKEN = "<一次性开发 Token>"
 
 开发 Token 拥有全部同伴的完整作用域。不要把 Token 写进仓库、截图或 `fabric.mod.json`。
 
-## 3.5 游戏内配置直连模型（可选，`0.1.0-beta`）
+## 3.5 配置模型（可选，`0.1.1-beta`）
 
-> `M6` 起模型调用迁移到玩家客户端，Key 只存客户端，服务端不再发起请求。
-> 本节的命令与服务端凭据文件仅适用于当前 `0.1.0-beta`；升级后按
-> [`docs/10-autonomy-and-scripting.md`](10-autonomy-and-scripting.md) 在客户端配置。
+> `0.1.0-beta` 的服务端 `/tlmm llm *` 命令和服务端凭据文件已废弃。自 `0.1.1-beta`（M6）
+> 起，模型调用只在玩家客户端发起：服务端不保存 API Key、不发起请求，只校验并执行计划。
 
-右键同伴打开管理界面，点击“AI 设置”，填写 OpenAI 兼容的 base URL、model name 和
-API Token。也可以由 owner 或 OP 使用命令：
-
-```text
-/tlmm llm base <url>
-/tlmm llm model <model>
-/tlmm llm token <token>
-/tlmm llm enabled true
-```
-
-base URL 应指向 chat completions 端点，例如
-`https://api.openai.com/v1/chat/completions`。Token 只保存在服务端配置目录的独立凭据
-文件中，不会出现在聊天回显、日志或审计记录；输入框只显示掩码。未配置模型时同伴仍
-可执行跟随、驻守、守卫和作物收割。
+右键同伴打开管理界面，点击「AI 设置」，填写 OpenAI 兼容的 base URL、model name 和
+API Token。base URL 写 `https://api.openai.com/v1` 或完整的
+`https://api.openai.com/v1/chat/completions` 都可以，模组会自动补齐端点。配置写在客户端
+游戏目录的 `config/tlmm-client.toml`，API Key 单独存在 `config/tlmm/credentials.key`；
+Key 不进入聊天回显、日志或审计，输入框只显示掩码。未配置模型时，同伴仍保留确定性基础
+行为，也仍可由外部 MCP Agent 驱动。
 
 ## 4. 启动 MCP 端点
 

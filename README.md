@@ -20,9 +20,12 @@ NeoForge 保留为 Fabric 行为边界稳定后的后续适配，不阻塞首个
 
 ## 当前状态
 
-**`0.1.0-beta` 发布候选（Fabric 26.3）**。M0 至 M3 已完成，M4 已落地客户端模型与
-动画、紧凑管理界面、中英文文本、MCP 连接引导与复制、配置版本与迁移、MCP 并发/频率
-限制、健康诊断、性能与浸泡脚本、许可证清单和发布文档。
+**当前发布 `v0.1.1-beta`（pre-release，Fabric 26.3）**。M0 至 M4 已发布为
+`0.1.0-beta`；本工作线的 M5 / M6（客户端脑、有界计划、自主模式、学习闭环、Skill 三级
+加载）已完成并通过基础验收，另发 `v0.1.1-beta` 供试用。它**不代表 0.2 正式发布验收
+通过**：24 小时浸泡与干净 VM 门禁仍未关闭，见
+[`docs/validation/M6.md`](docs/validation/M6.md) 与
+[`docs/releases/v0.1.1-beta.md`](docs/releases/v0.1.1-beta.md)。
 
 - M0 技术验证：Go（[记录](docs/validation/M0.md)）。
 - M1 同伴实体、命令、背包、装备、饥饿、守卫与安全反射、右键管理界面
@@ -33,6 +36,8 @@ NeoForge 保留为 Fabric 行为边界稳定后的后续适配，不阻塞首个
   游戏内授权、断线降级、Skill 示例（[记录](docs/validation/M3.md)）。
 - M4 发布准备：客户端模型/动画/状态、界面与双语、配置迁移、MCP 限制、诊断、长稳脚本、
   许可证与 Issue 模板（[记录](docs/validation/M4.md)）。
+- M5 / M6：客户端脑、有界动作计划、区域农作与整理、语义知识库、四档自主模式、
+  计划模板审阅与 Skill 三级加载（[整体验收](docs/validation/M6.md)）。
 
 24 小时浸泡是发布操作者门禁：使用 [`scripts/soak.ps1`](scripts/soak.ps1) 在目标专用服
 执行并保存 CSV。仓库内的短时验证不能替代该运行。
@@ -64,7 +69,7 @@ NeoForge 保留为 Fabric 行为边界稳定后的后续适配，不阻塞首个
 `docs/validation/M6.0.md`、`M6.1.md`、`M6.2.md`、`M6.3.md`、`M6.3b.md`、`M6.4.md`。
 
 模型配置与 Key 只存在于客户端（`config/tlmm-client.toml`、`config/tlmm/credentials.key`）；
-服务端 `[llm]` 段自 0.2 起被忽略，只提示不读取。
+服务端 `[llm]` 段自 `0.1.1-beta`（M6）起被忽略，只提示不读取。
 
 ## 快速开始（30 分钟）
 
