@@ -58,6 +58,9 @@ public final class TlmmFabricClient implements ClientModInitializer {
         ClientPlayNetworking.registerGlobalReceiver(AgentClientPayloads.Notice.TYPE,
                 (payload, context) -> context.client().execute(
                         () -> AgentLoop.get().onNotice(payload)));
+        ClientPlayNetworking.registerGlobalReceiver(AgentClientPayloads.Opportunities.TYPE,
+                (payload, context) -> context.client().execute(
+                        () -> AgentLoop.get().onOpportunities(payload)));
         ClientPlayNetworking.registerGlobalReceiver(AgentClientPayloads.KnowledgeRequest.TYPE,
                 (payload, context) -> context.client().execute(
                         () -> KnowledgeAnnotator.handle(payload)));

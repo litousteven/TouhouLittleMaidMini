@@ -155,6 +155,52 @@ public final class AgentPrompt {
                 : String.format(Locale.ROOT, "%.2f", value);
     }
 
+    /**
+     * The user message for an autonomy round: candidates plus the rule that "none" is legal.
+     *
+     * <p>Explicitly forbids inventing a task. Without that line a model tends to answer with a
+     * plausible chore it was not offered, and the server would refuse it as a stale
+     * opportunity — correct, but a wasted round trip.
+     */
+    public static String autonomyUser(String observationJson,
+            java.util.List<com.touhoulittlemaid.mini.core.autonomy.Opportunity> candidates,
+            boolean auto) {
+        StringBuilder options = new StringBuilder();
+        for (com.touhoulittlemaid.mini.core.autonomy.Opportunity opportunity : candidates) {
+            options.append("- ").append(opportunity.id()).append(": ")
+                    .append(opportunity.why())
+                    .append(" [modules: ")
+                    .append(String.join(", ", com.touhoulittlemaid.mini.core.autonomy.Opportunity
+                            .requiredModules(opportunity.id())))
+                    .append(']');
+            if (!opportunity.suggested().isEmpty()) {
+                options.append(' ').append(opportunity.suggested());
+            }
+            options.append('\n');
+        }
+        return """
+                Observation (server truth, read-only):
+                %s
+
+                The owner is not asking for anything. These are the only things worth doing:
+                %s
+                Answer with ONE JSON object:
+                {"choice":"<one id from the list, or none>","say":"<short line for the owner>",
+                 "plan":{...} or null}
+
+                Rules:
+                - choose "none" when the list does not actually help right now; that is a good
+                  answer, not a failure.
+                - the plan must use the module that matches the chosen id and only the
+                  parameters its catalogue line lists.
+                - %s
+                - never invent a task that is not in the list.
+                """.formatted(observationJson == null ? "{}" : observationJson,
+                options.toString().stripTrailing(),
+                auto ? "you may start it yourself once it passes the budget"
+                        : "the owner will be asked to confirm before anything runs").strip();
+    }
+
     public static String user(String observationJson, String playerMessage) {
         return """
                 Observation (server truth, read-only):

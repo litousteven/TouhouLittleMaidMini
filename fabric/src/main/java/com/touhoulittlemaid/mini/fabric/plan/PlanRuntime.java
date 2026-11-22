@@ -47,8 +47,13 @@ public final class PlanRuntime {
 
     /** A running plan as the UI needs it: where it is, not what it holds. */
     public record Snapshot(String planId, int step, int steps, String module, int actions,
-            int ticks) {
+            int ticks, String source) {
     }
+
+    /** Who asked for the plan: the owner in chat, the owner through a command, or the tier. */
+    public static final String SOURCE_COMMAND = "command";
+    public static final String SOURCE_CHAT = "chat";
+    public static final String SOURCE_AUTONOMY = "autonomy";
 
     /** Called once per plan, after the runner stopped, on the server thread. */
     public interface CompletionListener {
@@ -75,6 +80,11 @@ public final class PlanRuntime {
     /** Validates and starts a plan for one companion. Must run on the server thread. */
     public static SubmitResult submit(CompanionEntity companion, ParsedPlan parsed,
             PlanGate.Policy policy) {
+        return submit(companion, parsed, policy, SOURCE_COMMAND);
+    }
+
+    public static SubmitResult submit(CompanionEntity companion, ParsedPlan parsed,
+            PlanGate.Policy policy, String source) {
         ModuleRegistry registry = FabricModules.registry();
         PlanGate.Result gate = new PlanGate(registry, policy).check(parsed);
         if (!gate.ok()) {
@@ -89,7 +99,8 @@ public final class PlanRuntime {
         String planId = "plan-" + IDS.incrementAndGet();
         FabricModuleContext context = new FabricModuleContext(companion, planId);
         FabricPredicates predicates = new FabricPredicates(context);
-        Session session = new Session(planId, companion, context, parsed.plan().stepCount());
+        Session session = new Session(planId, companion, context, parsed.plan().stepCount(),
+                source == null ? SOURCE_COMMAND : source);
         PlanRunner runner = new PlanRunner(parsed.plan(), registry, context, predicates,
                 new EventPublisher(session));
         predicates.attach(runner);
@@ -137,7 +148,7 @@ public final class PlanRuntime {
         }
         PlanRunner runner = session.runner;
         return Optional.of(new Snapshot(session.planId, runner.currentIndex(), session.steps,
-                runner.currentModule(), runner.actions(), runner.ticks()));
+                runner.currentModule(), runner.actions(), runner.ticks(), session.source));
     }
 
     public static int activeCount() {
@@ -206,15 +217,17 @@ public final class PlanRuntime {
         final CompanionEntity companion;
         final FabricModuleContext context;
         final int steps;
+        final String source;
         PlanRunner runner;
         boolean notified;
 
         Session(String planId, CompanionEntity companion, FabricModuleContext context,
-                int steps) {
+                int steps, String source) {
             this.planId = planId;
             this.companion = companion;
             this.context = context;
             this.steps = steps;
+            this.source = source;
         }
     }
 
@@ -231,6 +244,7 @@ public final class PlanRuntime {
         public void planStarted(Plan plan) {
             publish("plan_started", "{\"plan_id\":" + quote(session.planId)
                     + ",\"goal\":" + quote(plan.goal())
+                    + ",\"source\":" + quote(session.source)
                     + ",\"steps\":" + plan.stepCount() + "}");
         }
 
@@ -253,6 +267,7 @@ public final class PlanRuntime {
         @Override
         public void planFinished(PlanRunner.Summary summary) {
             publish("plan_finished", "{\"plan_id\":" + quote(session.planId)
+                    + ",\"source\":" + quote(session.source)
                     + ",\"ok\":" + summary.ok()
                     + ",\"state\":" + quote(summary.state().name())
                     + ",\"code\":" + quote(summary.code())

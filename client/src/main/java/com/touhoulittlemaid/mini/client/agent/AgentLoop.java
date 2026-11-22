@@ -70,6 +70,14 @@ public final class AgentLoop {
     private CompletableFuture<String> observation;
     private int observationDeadline;
     private int ticks;
+    private java.util.List<com.touhoulittlemaid.mini.core.autonomy.Opportunity> candidates =
+            java.util.List.of();
+    private boolean autonomyRound;
+    private boolean autonomyAuto;
+    private String autonomyTier = "chores";
+    private String pendingSource = "chat";
+    private int pendingTokens;
+    private int lastTokens;
 
     private AgentLoop() {
     }
@@ -119,6 +127,7 @@ public final class AgentLoop {
             return;
         }
         addLine("user", message);
+        endAutonomyRound();
         if (isBusy()) {
             addLine("system", "还在处理上一条消息，请稍等。");
             return;
@@ -140,10 +149,16 @@ public final class AgentLoop {
         }
         String plan = pendingPlan;
         String goal = pendingGoal;
+        // Capture the round's provenance before clearing it: a confirmed "suggest" plan is
+        // still an autonomy plan and must carry the opportunity id and its token count.
+        String source = pendingSource;
+        int tokens = pendingTokens;
         pendingPlan = null;
         pendingGoal = null;
+        pendingSource = "chat";
+        pendingTokens = 0;
         addLine("system", "已确认，开始执行。");
-        submitPlan(plan, goal, true);
+        submitPlan(plan, goal, true, source, tokens);
     }
 
     public void dropPending() {
@@ -152,6 +167,9 @@ public final class AgentLoop {
         }
         pendingPlan = null;
         pendingGoal = null;
+        pendingSource = "chat";
+        pendingTokens = 0;
+        endAutonomyRound();
         addLine("system", "已取消这次计划。");
         notifyListeners();
     }
@@ -198,6 +216,37 @@ public final class AgentLoop {
         think(message, json);
     }
 
+    /**
+     * The director found candidates. Autonomy never interrupts a chat answer in progress: a
+     * player who is being answered is more important than a chore.
+     */
+    public void onOpportunities(AgentClientPayloads.Opportunities payload) {
+        if (payload.rows().isEmpty() || state != State.IDLE || planRunning()
+                || !loadConfig().ready()) {
+            return;
+        }
+        candidates = payload.rows().stream()
+                .map(row -> com.touhoulittlemaid.mini.core.autonomy.Opportunity.of(row.id(),
+                        row.why(), row.priority()))
+                .toList();
+        autonomyRound = true;
+        autonomyAuto = payload.auto();
+        autonomyTier = payload.tier().isBlank() ? "chores" : payload.tier();
+        requestObservation(null);
+    }
+
+    /** True while a plan is running; checked through the task snapshot the server sends. */
+    private boolean planRunning() {
+        Task current = task;
+        return current != null && current.running();
+    }
+
+    /** Clears the round on every exit path, so a failed model call cannot leave it stuck. */
+    private void endAutonomyRound() {
+        autonomyRound = false;
+        candidates = java.util.List.of();
+    }
+
     public void onTaskState(AgentClientPayloads.TaskState payload) {
         task = new Task(payload.planId(), payload.step(), payload.steps(), payload.module(),
                 payload.actions(), true, "", "");
@@ -242,6 +291,7 @@ public final class AgentLoop {
             observation = null;
             pendingMessage = null;
             state = State.IDLE;
+            endAutonomyRound();
             addLine("error", "服务器没有回应观察请求，稍后再试。");
         }
     }
@@ -266,14 +316,18 @@ public final class AgentLoop {
         ModelConfigStore.Loaded loaded = loadConfig();
         if (!loaded.ready()) {
             state = State.IDLE;
+            endAutonomyRound();
             addLine("error", "模型配置不完整，请先在 AI 设置里补全。");
             return;
         }
         ModuleRegistry registry = FabricModules.registry();
+        String userMessage = autonomyRound
+                ? AgentPrompt.autonomyUser(observationJson, candidates, autonomyAuto)
+                : AgentPrompt.user(observationJson, message);
         List<ChatClient.Message> messages = List.of(
                 ChatClient.Message.system(
                         AgentPrompt.system(companionName(observationJson), registry)),
-                ChatClient.Message.user(AgentPrompt.user(observationJson, message)));
+                ChatClient.Message.user(userMessage));
         completeAsync(loaded, messages, registry, 0);
     }
 
@@ -289,17 +343,22 @@ public final class AgentLoop {
             try {
                 ChatClient.Reply reply = client.complete(loaded.config(), loaded.token(),
                         messages);
-                onClientThread(() -> handleReply(reply.content(), loaded, messages, registry,
-                        depth));
+                int tokens = reply.usage() == null ? 0 : reply.usage().total();
+                onClientThread(() -> {
+                    lastTokens = tokens;
+                    handleReply(reply.content(), loaded, messages, registry, depth);
+                });
             } catch (ChatClient.ModelException exception) {
                 onClientThread(() -> {
                     state = State.IDLE;
+                    endAutonomyRound();
                     addLine("error", "模型调用失败（" + exception.code() + "）："
                             + explain(exception.code()));
                 });
             } catch (RuntimeException exception) {
                 onClientThread(() -> {
                     state = State.IDLE;
+                    endAutonomyRound();
                     addLine("error", "模型调用失败：" + exception.getClass().getSimpleName());
                 });
             }
@@ -313,6 +372,7 @@ public final class AgentLoop {
             var module = registry.find(describe);
             if (module.isEmpty()) {
                 state = State.IDLE;
+                endAutonomyRound();
                 addLine("error", "模型问了一个不存在的模块：" + describe);
                 return;
             }
@@ -327,11 +387,16 @@ public final class AgentLoop {
         AgentReply reply = AgentReply.parse(content);
         if (!reply.ok()) {
             state = State.IDLE;
+            endAutonomyRound();
             addLine("error", "模型回答看不懂（" + reply.code() + "）：" + reply.message());
             return;
         }
         if (!reply.say().isBlank()) {
             addLine("companion", reply.say());
+        }
+        if (autonomyRound) {
+            handleAutonomyChoice(reply, registry);
+            return;
         }
         if (!reply.hasPlan()) {
             state = State.IDLE;
@@ -362,10 +427,73 @@ public final class AgentLoop {
                     + check.message());
             return;
         }
-        submitPlan(reply.planJson(), parsed.plan().goal(), false);
+        submitPlan(reply.planJson(), parsed.plan().goal(), false,
+                autonomyRound ? "autonomy" : "chat", lastTokens);
     }
 
-    private void submitPlan(String planJson, String goal, boolean confirmed) {
+    /** Handles the model's answer to an autonomy round; it never falls through to chat. */
+    private void handleAutonomyChoice(AgentReply reply, ModuleRegistry registry) {
+        String chosen = reply.choice() == null ? "" : reply.choice().strip();
+        boolean offered = candidates.stream().anyMatch(row -> row.id().equals(chosen));
+        if (chosen.isEmpty() || "none".equalsIgnoreCase(chosen)) {
+            endAutonomyRound();
+            state = State.IDLE;
+            addLine("system", "她看了看，觉得现在不用做什么。");
+            notifyListeners();
+            return;
+        }
+        if (!offered) {
+            endAutonomyRound();
+            state = State.IDLE;
+            addLine("error", "模型选了一个不在候选里的目标：" + chosen);
+            notifyListeners();
+            return;
+        }
+        if (!reply.hasPlan()) {
+            endAutonomyRound();
+            state = State.IDLE;
+            addLine("system", "她选了 " + chosen + "，但没有给出计划。");
+            notifyListeners();
+            return;
+        }
+        if (!autonomyAuto) {
+            // Suggest tier: the plan is good, the decision is the player's.
+            pendingPlan = reply.planJson();
+            pendingGoal = chosen;
+            pendingSource = "autonomy";
+            pendingTokens = lastTokens;
+            endAutonomyRound();
+            state = State.IDLE;
+            addLine("system", "要不要我去做这件事？");
+            notifyListeners();
+            return;
+        }
+        ParsedPlan parsed;
+        try {
+            parsed = PlanJson.parse(reply.planJson());
+        } catch (PlanFormatException exception) {
+            endAutonomyRound();
+            state = State.IDLE;
+            addLine("error", "自主计划的格式不对（" + exception.code() + "）");
+            return;
+        }
+        PlanGate.Result check = new PlanGate(registry,
+                com.touhoulittlemaid.mini.core.autonomy.AutonomyTier.fromId(autonomyTier)
+                        .policy()).check(parsed);
+        if (!check.ok()) {
+            endAutonomyRound();
+            state = State.IDLE;
+            addLine("error", "自主计划被本地检查拒绝（" + describe(check.code()) + "）："
+                    + check.message());
+            return;
+        }
+        autonomyRound = false;
+        candidates = java.util.List.of();
+        submitPlan(reply.planJson(), chosen, false, "autonomy", lastTokens);
+    }
+
+    private void submitPlan(String planJson, String goal, boolean confirmed, String source,
+            int tokens) {
         if (!ClientPlayNetworking.canSend(AgentServerPayloads.SubmitPlan.TYPE)) {
             state = State.IDLE;
             addLine("error", "服务器没有安装这个模组，无法执行计划。");
@@ -373,7 +501,7 @@ public final class AgentLoop {
         }
         pendingRequestId = "req-" + requestIds.incrementAndGet();
         ClientPlayNetworking.send(new AgentServerPayloads.SubmitPlan(pendingRequestId,
-                goal == null ? "" : goal, planJson, confirmed));
+                goal == null ? "" : goal, planJson, confirmed, source, tokens));
         state = State.RUNNING;
         notifyListeners();
     }

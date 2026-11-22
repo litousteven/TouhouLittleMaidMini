@@ -124,5 +124,13 @@
   "gui.tlmm.ai.saved_client": "Saved on this client",
   "gui.tlmm.ai.save_failed": "Could not write the config file",
   "gui.tlmm.ai.not_ready": "Fill base URL and model first",
-  "gui.tlmm.ai.client_only": "Stored on this client only; the server never sees the key."
+  "gui.tlmm.ai.client_only": "Stored on this client only; the server never sees the key.",
+  "command.tlmm.autonomy.set": "Autonomy tier is now %s",
+  "command.tlmm.autonomy.status": "Autonomy tier: %s",
+  "command.tlmm.autonomy.reset": "Autonomy budget reset",
+  "command.tlmm.autonomy.empty": "Nothing to do right now (%s)",
+  "command.tlmm.autonomy.no_companion": "No companion with that name",
+  "command.tlmm.ai.pause": "Autonomy paused for %s minutes (until %s)",
+  "command.tlmm.ai.resume": "Autonomy resumed",
+  "command.tlmm.ai.status": "Autonomy: %s"
 }

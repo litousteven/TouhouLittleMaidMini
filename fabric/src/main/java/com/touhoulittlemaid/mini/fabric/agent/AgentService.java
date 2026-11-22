@@ -1,6 +1,8 @@
 package com.touhoulittlemaid.mini.fabric.agent;
 
 import com.touhoulittlemaid.mini.core.agent.AgentRateLimiter;
+import com.touhoulittlemaid.mini.core.autonomy.AutonomyTier;
+import com.touhoulittlemaid.mini.core.autonomy.Opportunity;
 import com.touhoulittlemaid.mini.core.plan.FailureCodes;
 import com.touhoulittlemaid.mini.core.plan.ParsedPlan;
 import com.touhoulittlemaid.mini.core.plan.PlanFormatException;
@@ -12,6 +14,7 @@ import com.touhoulittlemaid.mini.core.semantic.KnowledgeBatch;
 import com.touhoulittlemaid.mini.core.semantic.KnowledgeBatchJson;
 import com.touhoulittlemaid.mini.core.semantic.KnowledgeIngest;
 import com.touhoulittlemaid.mini.fabric.TlmmFabric;
+import com.touhoulittlemaid.mini.fabric.autonomy.Director;
 import com.touhoulittlemaid.mini.fabric.entity.CompanionEntity;
 import com.touhoulittlemaid.mini.fabric.network.AgentClientPayloads;
 import com.touhoulittlemaid.mini.fabric.network.AgentServerPayloads;
@@ -67,6 +70,8 @@ public final class AgentService {
                 AgentClientPayloads.TaskResult.STREAM_CODEC);
         clientbound.register(AgentClientPayloads.Notice.TYPE,
                 AgentClientPayloads.Notice.STREAM_CODEC);
+        clientbound.register(AgentClientPayloads.Opportunities.TYPE,
+                AgentClientPayloads.Opportunities.STREAM_CODEC);
         clientbound.registerLarge(AgentClientPayloads.KnowledgeRequest.TYPE,
                 AgentClientPayloads.KnowledgeRequest.STREAM_CODEC, 64 * 1024);
         serverbound.register(AgentServerPayloads.SubmitPlan.TYPE,
@@ -137,12 +142,55 @@ public final class AgentService {
             result(player, payload.requestId(), false, exception.code(), exception.getMessage());
             return;
         }
-        // The policy is chosen by the confirmation flag, never by the client's claim about it.
-        PlanGate.Policy policy = payload.confirmed() ? PlanGate.Policy.commandConfirmed()
-                : PlanGate.Policy.command();
+        // The policy is chosen by the server's tier, never by the client's claim about it.
+        // An autonomy plan must answer a candidate this server issued in the current round.
+        boolean autonomy = PlanRuntime.SOURCE_AUTONOMY.equals(payload.source());
+        PlanGate.Policy policy;
+        if (autonomy) {
+            AutonomyTier tier = Director.tier();
+            if (!tier.scans()) {
+                result(player, payload.requestId(), false, FailureCodes.RISK_DENIED,
+                        "autonomy is off; this plan needs an explicit command");
+                return;
+            }
+            // The choice is not decoration: at least one step must do the job the model
+            // said it picked. Without this a modified client could select "tidy_chests"
+            // and submit an entirely different free-tier plan.
+            java.util.List<String> required = Opportunity.requiredModules(payload.goal());
+            if (required.isEmpty() || parsed.plan().steps().stream()
+                    .noneMatch(step -> required.contains(step.module()))) {
+                result(player, payload.requestId(), false, FailureCodes.RISK_DENIED,
+                        "the plan does not do the chosen opportunity");
+                return;
+            }
+            if (!Director.consumeOpportunity(companion.getUUID(), payload.goal())) {
+                result(player, payload.requestId(), false, FailureCodes.STALE_OPPORTUNITY,
+                        "that opportunity is no longer open; wait for the next round");
+                return;
+            }
+            // "suggest" tiers may only run a plan the owner actually confirmed.
+            if (!tier.autoRuns() && !payload.confirmed()) {
+                result(player, payload.requestId(), false, FailureCodes.CONFIRMATION_REQUIRED,
+                        "this tier needs the owner to confirm the plan first");
+                return;
+            }
+            // A confirmed flag NEVER widens an autonomy policy. Without this, a modified
+            // client could mark its own chore as confirmed and get commandConfirmed() —
+            // the full destructive library — while still calling it autonomy.
+            policy = tier.policy();
+        } else {
+            // A command outranks the companion's own chores.
+            PlanRuntime.snapshot(companion.getUUID())
+                    .filter(snapshot -> PlanRuntime.SOURCE_AUTONOMY.equals(snapshot.source()))
+                    .ifPresent(snapshot -> PlanRuntime.cancel(companion.getUUID(),
+                            "owner gave a command"));
+            policy = payload.confirmed() ? PlanGate.Policy.commandConfirmed()
+                    : PlanGate.Policy.command();
+        }
         PlanRuntime.SubmitResult submitted;
         try {
-            submitted = PlanRuntime.submit(companion, parsed, policy);
+            submitted = PlanRuntime.submit(companion, parsed, policy,
+                    autonomy ? PlanRuntime.SOURCE_AUTONOMY : PlanRuntime.SOURCE_CHAT);
         } catch (RuntimeException exception) {
             result(player, payload.requestId(), false, FailureCodes.INTERRUPTED,
                     "plan could not start: " + exception.getClass().getSimpleName());
@@ -151,6 +199,15 @@ public final class AgentService {
         if (!submitted.ok()) {
             result(player, payload.requestId(), false, submitted.code(), submitted.message());
             return;
+        }
+        if (autonomy) {
+            // Tokens are client-reported: the server cannot see the model response. Use the
+            // plan text as a floor so a modified client cannot report zero and evade the
+            // daily budget, and cap the value so one packet cannot exhaust it outright.
+            int tokens = Math.min(100_000, Math.max(payload.tokens(),
+                    json.getBytes(StandardCharsets.UTF_8).length / 4));
+            Director.noteAutonomyPlan(companion.getUUID(), submitted.planId(),
+                    payload.goal(), tokens, System.currentTimeMillis());
         }
         PlanRuntime.activePlanId(companion.getUUID()).ifPresent(id ->
                 send(player, new AgentClientPayloads.TaskState(id, 0, parsed.plan().stepCount(),

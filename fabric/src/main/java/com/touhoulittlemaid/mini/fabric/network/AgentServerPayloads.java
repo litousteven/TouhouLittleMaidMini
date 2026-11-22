@@ -28,8 +28,8 @@ public final class AgentServerPayloads {
      * pressed confirm on a destructive plan". The server re-gates with the stricter or looser
      * policy accordingly; the flag never skips validation.
      */
-    public record SubmitPlan(String requestId, String goal, String planJson, boolean confirmed)
-            implements CustomPacketPayload {
+    public record SubmitPlan(String requestId, String goal, String planJson, boolean confirmed,
+            String source, int tokens) implements CustomPacketPayload {
 
         public static final Type<SubmitPlan> TYPE =
                 new Type<>(Identifier.parse("tlmm:agent_submit_plan"));
@@ -40,8 +40,16 @@ public final class AgentServerPayloads {
                     buffer.writeUtf(payload.goal(), MAX_TEXT);
                     buffer.writeUtf(payload.planJson(), MAX_PLAN);
                     buffer.writeBoolean(payload.confirmed());
+                    buffer.writeUtf(payload.source(), 32);
+                    buffer.writeVarInt(payload.tokens());
                 }, buffer -> new SubmitPlan(buffer.readUtf(MAX_TEXT), buffer.readUtf(MAX_TEXT),
-                        buffer.readUtf(MAX_PLAN), buffer.readBoolean()));
+                        buffer.readUtf(MAX_PLAN), buffer.readBoolean(), buffer.readUtf(32),
+                        buffer.readVarInt()));
+
+        public SubmitPlan {
+            source = source == null || source.isBlank() ? "chat" : source;
+            tokens = Math.max(0, tokens);
+        }
 
         @Override
         public Type<SubmitPlan> type() {

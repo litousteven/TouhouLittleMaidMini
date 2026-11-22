@@ -55,11 +55,15 @@ public final class TlmmFabric implements ModInitializer {
                 ServerDiagnostics::tick);
         // Plans advance once per tick; each step is bounded, so this never blocks the world.
         com.touhoulittlemaid.mini.fabric.plan.PlanRuntime.register();
+        // Autonomy: a deterministic scan whose output the model may only choose from.
+        com.touhoulittlemaid.mini.fabric.autonomy.PlacementTracker.register();
+        com.touhoulittlemaid.mini.fabric.autonomy.Director.register();
         ServerLifecycleEvents.SERVER_STARTED.register(server -> {
             int saveVersion = M0SavedData.get(server).value();
             LOGGER.info("[m0] saved-data baseline value={}", saveVersion);
             CompanionConfigs.load();
             com.touhoulittlemaid.mini.fabric.config.LlmConfigs.load();
+            com.touhoulittlemaid.mini.fabric.autonomy.AutonomyConfig.load();
             com.touhoulittlemaid.mini.fabric.semantic.KnowledgeService.load(
                     com.touhoulittlemaid.mini.fabric.semantic.SemanticService
                             .knowledgeDirectory(FabricLoader.getInstance().getGameDir()));
@@ -96,6 +100,9 @@ public final class TlmmFabric implements ModInitializer {
             CompanionConfigs.reset();
             com.touhoulittlemaid.mini.fabric.semantic.KnowledgeService.reset();
             com.touhoulittlemaid.mini.fabric.agent.AgentService.reset();
+            com.touhoulittlemaid.mini.fabric.autonomy.Director.reset();
+            com.touhoulittlemaid.mini.fabric.autonomy.AutonomyConfig.reset();
+            com.touhoulittlemaid.mini.fabric.autonomy.PlacementTracker.clear();
             ServerDiagnostics.reset();
             state.set(PlatformState.starting(MOD_VERSION, MINECRAFT_VERSION));
         });

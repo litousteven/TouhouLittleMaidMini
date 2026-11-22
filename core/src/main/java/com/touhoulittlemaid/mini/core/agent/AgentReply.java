@@ -22,7 +22,8 @@ import java.util.Set;
  * block around the object, prose before or after it, and a bare plan object without the
  * wrapper. Everything else is strict.
  */
-public record AgentReply(boolean ok, String say, String planJson, String code, String message) {
+public record AgentReply(boolean ok, String say, String planJson, String choice, String code,
+        String message) {
 
     public static final String EMPTY_REPLY = "empty_reply";
     public static final String INVALID_REPLY = "invalid_reply";
@@ -77,7 +78,8 @@ public record AgentReply(boolean ok, String say, String planJson, String code, S
         if (planJson == null && say.isBlank()) {
             return failed(INVALID_REPLY, "the answer has neither text nor a plan");
         }
-        return new AgentReply(true, say, planJson, "ok", "reply accepted");
+        return new AgentReply(true, say, planJson, text(root.get("choice")), "ok",
+                "reply accepted");
     }
 
     /**
@@ -195,6 +197,6 @@ public record AgentReply(boolean ok, String say, String planJson, String code, S
     }
 
     private static AgentReply failed(String code, String message) {
-        return new AgentReply(false, "", null, code, message);
+        return new AgentReply(false, "", null, "", code, message);
     }
 }

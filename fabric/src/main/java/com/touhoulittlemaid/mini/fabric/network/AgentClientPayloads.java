@@ -109,6 +109,57 @@ public final class AgentClientPayloads {
         }
     }
 
+    /**
+     * The deterministic candidates the director found, sent to the owner's client.
+     *
+     * <p>{@code auto} tells the client whether a chosen plan may start by itself or has to wait
+     * for the player to press confirm. The server re-checks both, so a modified client gains
+     * nothing by flipping the flag.
+     */
+    public record Opportunities(List<Row> rows, String tier, boolean auto)
+            implements CustomPacketPayload {
+
+        public static final int MAX_ROWS = 4;
+
+        public record Row(String id, String why, int priority) {
+        }
+
+        public static final Type<Opportunities> TYPE =
+                new Type<>(Identifier.parse("tlmm:agent_opportunities"));
+
+        public static final StreamCodec<RegistryFriendlyByteBuf, Opportunities> STREAM_CODEC =
+                StreamCodec.of((buffer, payload) -> {
+                    int size = Math.min(payload.rows().size(), MAX_ROWS);
+                    buffer.writeVarInt(size);
+                    for (int index = 0; index < size; index++) {
+                        Row row = payload.rows().get(index);
+                        buffer.writeUtf(row.id(), MAX_TEXT);
+                        buffer.writeUtf(row.why(), MAX_TEXT);
+                        buffer.writeVarInt(row.priority());
+                    }
+                    buffer.writeUtf(payload.tier(), 32);
+                    buffer.writeBoolean(payload.auto());
+                }, buffer -> {
+                    int size = Math.min(buffer.readVarInt(), MAX_ROWS);
+                    List<Row> rows = new java.util.ArrayList<>(size);
+                    for (int index = 0; index < size; index++) {
+                        rows.add(new Row(buffer.readUtf(MAX_TEXT), buffer.readUtf(MAX_TEXT),
+                                buffer.readVarInt()));
+                    }
+                    return new Opportunities(rows, buffer.readUtf(32), buffer.readBoolean());
+                });
+
+        public Opportunities {
+            rows = rows == null ? List.of() : List.copyOf(rows);
+            tier = tier == null ? "" : tier;
+        }
+
+        @Override
+        public Type<Opportunities> type() {
+            return TYPE;
+        }
+    }
+
     /** A line for the chat panel: a refusal, a warning, a summary. */
     public record Notice(String level, String code, String message,
             List<String> details) implements CustomPacketPayload {

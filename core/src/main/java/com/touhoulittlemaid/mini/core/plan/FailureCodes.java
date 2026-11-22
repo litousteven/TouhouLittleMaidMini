@@ -24,6 +24,7 @@ public final class FailureCodes {
     public static final String BUDGET_EXCEEDED = "budget_exceeded";
     public static final String RISK_DENIED = "risk_denied";
     public static final String CONFIRMATION_REQUIRED = "confirmation_required";
+    public static final String STALE_OPPORTUNITY = "stale_opportunity";
     public static final String CANCELLED = "cancelled";
 
     // Reachability.

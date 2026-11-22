@@ -32,6 +32,8 @@ public final class FabricModules {
                 .register(GatherModule.mineMaterial())
                 .register(GatherModule.chopTree())
                 .register(new TidyModule())
+                // M6.5: the chores whitelist needs a way to clear drops at work stations.
+                .register(new PickupModule())
                 .build();
     }
 }

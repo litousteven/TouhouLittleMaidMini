@@ -14,6 +14,17 @@ class AgentReplyTest {
             """;
 
     @Test
+    void anAutonomyChoiceIsCarriedThroughStrictParsing() {
+        AgentReply reply = AgentReply.parse("""
+                {"choice":"harvest_farm","say":"我去收菜。","plan":%s}
+                """.formatted(PLAN));
+        assertTrue(reply.ok(), reply.message());
+        assertEquals("harvest_farm", reply.choice());
+        assertTrue(reply.hasPlan());
+        assertEquals("", AgentReply.parse("{\"say\":\"不用\",\"plan\":null}").choice());
+    }
+
+    @Test
     void acceptsaSayAndAPlan() {
         AgentReply reply = AgentReply.parse("""
                 {"say":"我去收菜。","plan":%s}

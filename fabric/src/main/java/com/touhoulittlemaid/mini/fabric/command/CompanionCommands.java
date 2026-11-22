@@ -73,6 +73,8 @@ public final class CompanionCommands {
                                                         StringArgumentType.getString(context, "id"),
                                                         false)))))
                         .then(KnowledgeCommands.node())
+                        .then(AutonomyCommands.node())
+                        .then(AiCommands.node())
                         .then(Commands.literal("mcp")
                                 .then(Commands.literal("token")
                                         .then(Commands.literal("create")
@@ -362,7 +364,7 @@ public final class CompanionCommands {
         return count;
     }
 
-    private static List<CompanionEntity> ownedCompanions(net.minecraft.commands.CommandSourceStack source) {
+    static List<CompanionEntity> ownedCompanions(net.minecraft.commands.CommandSourceStack source) {
         ServerPlayer player = source.getPlayer();
         if (player == null) {
             return List.of();

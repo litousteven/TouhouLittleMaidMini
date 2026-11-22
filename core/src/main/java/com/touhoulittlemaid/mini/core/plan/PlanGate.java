@@ -65,16 +65,18 @@ public final class PlanGate {
                 return Result.reject(FailureCodes.UNKNOWN_MODULE,
                         where + ": unknown module, known modules are " + registry.ids());
             }
-            if (module.risk() == RiskClass.DESTROY) {
-                if (policy.mode() == Mode.CHORES) {
-                    return Result.reject(FailureCodes.RISK_DENIED,
-                            where + ": " + module.risk() + " modules are not allowed in chores");
-                }
-                if (!policy.allowDestroy()) {
-                    return Result.reject(FailureCodes.CONFIRMATION_REQUIRED,
-                            where + ": " + module.risk()
-                                    + " modules need an explicit confirmation");
-                }
+            if (!policy.allowsModule(module.id())) {
+                return Result.reject(FailureCodes.RISK_DENIED,
+                        where + ": this mode only allows " + policy.allowedModules());
+            }
+            // A destructive module is allowed either because the mode permits destruction, or
+            // because the mode names it explicitly — chores harvest crops and tidy chests while
+            // still refusing to mine. Listing it is a stronger statement than a risk class.
+            if (module.risk() == RiskClass.DESTROY && !policy.allowDestroy()
+                    && !policy.allowedModules().contains(module.id())) {
+                return Result.reject(FailureCodes.CONFIRMATION_REQUIRED,
+                        where + ": " + module.risk()
+                                + " modules need an explicit confirmation");
             }
 
             Result paramResult = checkParams(module, step, bindings, where);
@@ -248,7 +250,17 @@ public final class PlanGate {
     }
 
     public record Policy(Mode mode, int maxSteps, int maxActions, int maxTicks,
-            int maxDestroyed, boolean allowDestroy) {
+            int maxDestroyed, boolean allowDestroy, List<String> allowedModules) {
+
+        /**
+         * Chores: what a companion may do on its own without being asked.
+         *
+         * <p>A whitelist, not a risk class. Harvesting destroys crops and tidying moves
+         * container contents, yet both are chores; mining is not, because it leaves the base.
+         */
+        public static final List<String> CHORE_MODULES = List.of("say", "goto", "harvest_area",
+                "plant_area", "till_area", "deposit_items", "withdraw_items", "smelt_items",
+                "tidy_chests", "move_slot", "pickup_items");
 
         public Policy {
             if (mode == null) {
@@ -257,27 +269,37 @@ public final class PlanGate {
             if (maxSteps < 1 || maxSteps > PlanLimits.MAX_STEPS) {
                 throw new IllegalArgumentException("maxSteps is outside the plan limit");
             }
+            allowedModules = allowedModules == null ? List.of() : List.copyOf(allowedModules);
+        }
+
+        public boolean allowsModule(String id) {
+            return allowedModules.isEmpty() || allowedModules.contains(id);
+        }
+
+        /** True when every module in a candidate's plan is inside this tier's whitelist. */
+        public boolean allowsModules(List<String> ids) {
+            return allowedModules.isEmpty() || allowedModules.containsAll(ids);
         }
 
         /** A command that must not remove blocks without a second confirmation. */
         public static Policy command() {
             return new Policy(Mode.COMMAND, PlanLimits.MAX_STEPS, PlanLimits.MAX_ACTIONS,
-                    PlanLimits.MAX_TICKS, PlanLimits.MAX_DESTROYED_BLOCKS, false);
+                    PlanLimits.MAX_TICKS, PlanLimits.MAX_DESTROYED_BLOCKS, false, List.of());
         }
 
         /** A command the player has explicitly confirmed, including destructive modules. */
         public static Policy commandConfirmed() {
             return new Policy(Mode.COMMAND, PlanLimits.MAX_STEPS, PlanLimits.MAX_ACTIONS,
-                    PlanLimits.MAX_TICKS, PlanLimits.MAX_DESTROYED_BLOCKS, true);
+                    PlanLimits.MAX_TICKS, PlanLimits.MAX_DESTROYED_BLOCKS, true, List.of());
         }
 
         public static Policy chores() {
-            return new Policy(Mode.CHORES, 12, 200, 300 * 20, 0, false);
+            return new Policy(Mode.CHORES, 12, 200, 300 * 20, 64, false, CHORE_MODULES);
         }
 
         public static Policy free() {
             return new Policy(Mode.FREE, PlanLimits.MAX_STEPS, PlanLimits.MAX_ACTIONS,
-                    PlanLimits.MAX_TICKS, 64, true);
+                    PlanLimits.MAX_TICKS, 64, true, List.of());
         }
     }
 

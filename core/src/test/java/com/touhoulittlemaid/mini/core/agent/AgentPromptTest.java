@@ -3,6 +3,7 @@ package com.touhoulittlemaid.mini.core.agent;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.touhoulittlemaid.mini.core.autonomy.Opportunity;
 import com.touhoulittlemaid.mini.core.plan.ActionModule;
 import com.touhoulittlemaid.mini.core.plan.ModuleContext;
 import com.touhoulittlemaid.mini.core.plan.ModuleExecution;
@@ -61,6 +62,25 @@ class AgentPromptTest {
         String text = AgentPrompt.user("{\"health\":20}", "把麦子收了");
         assertTrue(text.indexOf("{\"health\":20}") < text.indexOf("把麦子收了"));
         assertTrue(AgentPrompt.user(null, null).contains("{}"));
+    }
+
+    @Test
+    void autonomyUserIsAChoiceAmongOfferedCandidatesOnly() {
+        List<Opportunity> candidates = List.of(
+                Opportunity.of("harvest_farm", "23 株小麦熟了", 2),
+                Opportunity.of("tidy_chests", "3 个杂箱", 3));
+        String auto = AgentPrompt.autonomyUser("{\"health\":20}", candidates, true);
+        assertTrue(auto.contains("harvest_farm"), auto);
+        assertTrue(auto.contains("tidy_chests"), auto);
+        assertTrue(auto.contains("harvest_area"), auto);
+        assertTrue(auto.contains("\"none\""), auto);
+        assertTrue(auto.contains("never invent a task"), auto);
+        assertTrue(auto.contains("you may start it yourself"), auto);
+        assertFalse(auto.contains("mine_material"), auto);
+
+        String suggest = AgentPrompt.autonomyUser("{}", candidates, false);
+        assertTrue(suggest.contains("the owner will be asked to confirm"), suggest);
+        assertFalse(suggest.contains("you may start it yourself"), suggest);
     }
 
     private static final class Harvest implements ActionModule {

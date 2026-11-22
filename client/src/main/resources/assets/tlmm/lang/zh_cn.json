@@ -124,5 +124,13 @@
   "gui.tlmm.ai.saved_client": "已保存在本客户端",
   "gui.tlmm.ai.save_failed": "配置文件写入失败",
   "gui.tlmm.ai.not_ready": "请先填写 base URL 和模型名",
-  "gui.tlmm.ai.client_only": "只保存在本客户端，服务端看不到密钥。"
+  "gui.tlmm.ai.client_only": "只保存在本客户端，服务端看不到密钥。",
+  "command.tlmm.autonomy.set": "自主档位已设为 %s",
+  "command.tlmm.autonomy.status": "自主档位：%s",
+  "command.tlmm.autonomy.reset": "已重置自主预算",
+  "command.tlmm.autonomy.empty": "现在没有值得做的事（%s）",
+  "command.tlmm.autonomy.no_companion": "没有叫这个名字的同伴",
+  "command.tlmm.ai.pause": "已暂停自主行为 %s 分钟（至 %s）",
+  "command.tlmm.ai.resume": "已恢复自主行为",
+  "command.tlmm.ai.status": "自主状态：%s"
 }
