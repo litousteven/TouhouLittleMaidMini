@@ -318,7 +318,7 @@ M2 结论：**Go**。协议、认证、作用域、审计、幂等、事件、�
 `.\scripts\soak.ps1 -Minutes 1440 -IntervalSeconds 60` 并保存 CSV；短时验证不能替代该门禁。
 首次客户端启动若出现 `0xC0000005`，删除客户端缓存后重试；本机第二次运行已稳定通过。
 
-## M6 进度：0.2 模块框架、模块库、语义底座与标注闭环（M6.0–M6.3b）
+## M6 进度：0.2 模块框架、模块库、语义底座、标注闭环与客户端脑（M6.0–M6.4）
 
 验收记录：[`docs/validation/M6.0.md`](docs/validation/M6.0.md)、
 [`docs/validation/M6.1.md`](docs/validation/M6.1.md)、
@@ -344,12 +344,18 @@ M2 结论：**Go**。协议、认证、作用域、审计、幂等、事件、�
   S2C 视图包；`hostile` 必须人工确认，批次可整批回滚，可导出 `#tlmm:` 数据包。
 - 验证：`core 126` / `mcp 79` / `llm 3` 共 208 个用例；89 个 GameTest（连跑三次一致）；
   `verifyTranslations` 100 键一致。
-- 客户端脑（M6.4，进行中）：`llm` 模块新增 `ModelConfig`、`ChatClient`（OpenAI 兼容、
-  仅对 429/5xx/连接错误重试一次、错误码化）、`ModelConfigStore`（`config/tlmm-client.toml`
-  与 `config/tlmm/credentials.key` 分离）；真实端点联调用例 `LiveModelProbe` 在有
-  `TLMM_MODEL_*` 环境变量时运行，已通过一次（2.1s）。
-- 未完成：`M6.4` 的网络包、`AgentLoop`、Chat/任务 UI，以及删除服务端模型路径；
-  `M6.5` 自主模式、`M6.6` 学习闭环、`M6.7` 发布验收。
+- 客户端脑（M6.4）：`llm` 模块的 `ModelConfig`、`ChatClient`（OpenAI 兼容、仅对
+  429/5xx/连接错误重试一次、错误码化）、`ModelConfigStore`（`config/tlmm-client.toml`
+  与 `config/tlmm/credentials.key` 分离）；`core/agent` 的 `AgentReply`、`AgentPrompt`、
+  `AgentRateLimiter`；9 个网络包与 `AgentService`（owner 解析、`PlanGate` 复验、限流、
+  断线取消）；`AgentObserver` 裁剪观察；`PlanRuntime` 快照与完成监听；客户端 `AgentLoop`、
+  聊天面板、AI 设置页、`KnowledgeAnnotator`。
+- 服务端模型路径已删除：`LlmRuntime`、`LlmCredentials`、`LlmClient`、`core/LlmConfig`、
+  `/tlmm llm *`；`fabric/config/LlmConfigs` 只提示 `[llm]` 段被忽略。
+- 验证：`core 144` / `mcp 79` / `llm 15` 共 238 个用例；95 个 GameTest；
+  `verifyClientOnlyModel` 通过；客户端 GameTest 用真实模型
+  （`sensenova-6.8-flash`）跑通一次对话任务，截图在 `docs/validation/assets/m6.4/`。
+- 未开始：`M6.5` 自主模式、`M6.6` 学习闭环、`M6.7` 发布验收。
 
 ## 恢复工作
 

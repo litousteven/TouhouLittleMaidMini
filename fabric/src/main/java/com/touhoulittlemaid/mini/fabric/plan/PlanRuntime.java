@@ -32,6 +32,8 @@ public final class PlanRuntime {
 
     private static final Map<UUID, Session> ACTIVE = new ConcurrentHashMap<>();
     private static final AtomicLong IDS = new AtomicLong();
+    private static final java.util.List<CompletionListener> LISTENERS =
+            new java.util.concurrent.CopyOnWriteArrayList<>();
 
     private PlanRuntime() {
     }
@@ -41,6 +43,33 @@ public final class PlanRuntime {
     }
 
     public record SubmitResult(boolean ok, String code, String message, String planId) {
+    }
+
+    /** A running plan as the UI needs it: where it is, not what it holds. */
+    public record Snapshot(String planId, int step, int steps, String module, int actions,
+            int ticks) {
+    }
+
+    /** Called once per plan, after the runner stopped, on the server thread. */
+    public interface CompletionListener {
+
+        void finished(UUID companionId, String planId, PlanRunner.Summary summary);
+    }
+
+    /**
+     * Registers a completion listener.
+     *
+     * <p>The summary has to be taken here: once a session leaves {@link #ACTIVE} the runner is
+     * gone, so a poller that only looks at snapshots can never learn why a plan ended.
+     */
+    public static void addCompletionListener(CompletionListener listener) {
+        if (listener != null) {
+            LISTENERS.add(listener);
+        }
+    }
+
+    public static void clearCompletionListeners() {
+        LISTENERS.clear();
     }
 
     /** Validates and starts a plan for one companion. Must run on the server thread. */
@@ -60,7 +89,7 @@ public final class PlanRuntime {
         String planId = "plan-" + IDS.incrementAndGet();
         FabricModuleContext context = new FabricModuleContext(companion, planId);
         FabricPredicates predicates = new FabricPredicates(context);
-        Session session = new Session(planId, companion, context);
+        Session session = new Session(planId, companion, context, parsed.plan().stepCount());
         PlanRunner runner = new PlanRunner(parsed.plan(), registry, context, predicates,
                 new EventPublisher(session));
         predicates.attach(runner);
@@ -75,17 +104,18 @@ public final class PlanRuntime {
                     "plan failed to start: " + exception.getMessage(), planId);
         }
         if (runner.state() != PlanRunner.State.RUNNING) {
-            ACTIVE.remove(companion.getUUID());
+            finish(session);
         }
         return new SubmitResult(true, "started", "plan started", planId);
     }
 
     public static boolean cancel(UUID companionId, String reason) {
-        Session session = ACTIVE.remove(companionId);
+        Session session = ACTIVE.get(companionId);
         if (session == null) {
             return false;
         }
         session.runner.cancel(reason);
+        finish(session);
         return true;
     }
 
@@ -97,6 +127,17 @@ public final class PlanRuntime {
     public static boolean isRunning(UUID companionId) {
         Session session = ACTIVE.get(companionId);
         return session != null && session.runner.state() == PlanRunner.State.RUNNING;
+    }
+
+    /** Where the running plan is right now, if any. */
+    public static Optional<Snapshot> snapshot(UUID companionId) {
+        Session session = ACTIVE.get(companionId);
+        if (session == null || session.runner.state() != PlanRunner.State.RUNNING) {
+            return Optional.empty();
+        }
+        PlanRunner runner = session.runner;
+        return Optional.of(new Snapshot(session.planId, runner.currentIndex(), session.steps,
+                runner.currentModule(), runner.actions(), runner.ticks()));
     }
 
     public static int activeCount() {
@@ -118,24 +159,43 @@ public final class PlanRuntime {
             Session session = entry.getValue();
             try {
                 if (session.runner.state() != PlanRunner.State.RUNNING) {
-                    ACTIVE.remove(entry.getKey(), session);
+                    finish(session);
                     continue;
                 }
                 CompanionEntity companion = session.companion;
                 if (!companion.isAlive() || companion.isRemoved()) {
                     session.runner.cancel("companion is gone");
-                    ACTIVE.remove(entry.getKey(), session);
+                    finish(session);
                     continue;
                 }
                 session.runner.tick();
                 if (session.runner.state() != PlanRunner.State.RUNNING) {
-                    ACTIVE.remove(entry.getKey(), session);
+                    finish(session);
                 }
             } catch (RuntimeException exception) {
                 session.runner.cancel("plan tick failed: " + exception.getClass().getSimpleName());
-                ACTIVE.remove(entry.getKey(), session);
+                finish(session);
                 CompanionRuntimeState.publish(session.companion.getUUID(), "plan_error",
                         "{\"plan_id\":\"" + session.planId + "\",\"code\":\"interrupted\"}");
+            }
+        }
+    }
+
+    /** Removes one session and tells listeners exactly once. */
+    private static void finish(Session session) {
+        if (session.notified) {
+            return;
+        }
+        session.notified = true;
+        ACTIVE.remove(session.companion.getUUID(), session);
+        PlanRunner.Summary summary = session.runner.summary();
+        for (CompletionListener listener : LISTENERS) {
+            try {
+                listener.finished(session.companion.getUUID(), session.planId, summary);
+            } catch (RuntimeException exception) {
+                com.touhoulittlemaid.mini.fabric.TlmmFabric.LOGGER.warn(
+                        "[plan] completion listener failed: {}",
+                        exception.getClass().getSimpleName());
             }
         }
     }
@@ -145,12 +205,16 @@ public final class PlanRuntime {
         final String planId;
         final CompanionEntity companion;
         final FabricModuleContext context;
+        final int steps;
         PlanRunner runner;
+        boolean notified;
 
-        Session(String planId, CompanionEntity companion, FabricModuleContext context) {
+        Session(String planId, CompanionEntity companion, FabricModuleContext context,
+                int steps) {
             this.planId = planId;
             this.companion = companion;
             this.context = context;
+            this.steps = steps;
         }
     }
 

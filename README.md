@@ -52,15 +52,19 @@ NeoForge 保留为 Fabric 行为边界稳定后的后续适配，不阻塞首个
 - **学习产物**：模型只能产出可审阅的 Skill/计划模板，不进行模型训练，不生成代码。
 - **MCP 仍保留**：外部 Agent CLI 继续是受支持的驱动方式，与客户端计划落到同一套动作入口。
 
-当前状态：`M5` 切片已落地（`farm` 行为、AI 设置页、主动请求、Skill 提案）；`M6.0`–`M6.3b`
+当前状态：`M5` 切片已落地（`farm` 行为、AI 设置页、主动请求、Skill 提案）；`M6.0`–`M6.4`
 已落地（有界计划框架、挖掘/放置/容器/合成/熔炼、区域农作/采集/整理、语义标签与知识文件、
-未知内容标注闭环与审阅界面），89 个 GameTest 通过。`M6.4` 起的客户端脑、自主模式与学习闭环
-尚未实现：客户端对话与自主找活不可用，模型标注请求暂由 `/tlmm knowledge ingest` 承接。
+未知内容标注闭环与审阅界面、客户端脑与聊天面板），95 个 GameTest 通过，客户端 GameTest 用
+真实模型跑通一次对话任务。`M6.5` 起的自主模式与学习闭环尚未实现：同伴不会自己找活，
+需要玩家先说话；计划模板也不会自动生成。
 
 设计真源见 [`docs/10-autonomy-and-scripting.md`](docs/10-autonomy-and-scripting.md) 与
 [`docs/01-technical-design.md`](docs/01-technical-design.md)；`M5` 验收见
-[`docs/validation/M5.md`](docs/validation/M5.md)，`M6.0`–`M6.3b` 见
-`docs/validation/M6.0.md`、`M6.1.md`、`M6.2.md`、`M6.3.md`、`M6.3b.md`。
+[`docs/validation/M5.md`](docs/validation/M5.md)，`M6.0`–`M6.4` 见
+`docs/validation/M6.0.md`、`M6.1.md`、`M6.2.md`、`M6.3.md`、`M6.3b.md`、`M6.4.md`。
+
+模型配置与 Key 只存在于客户端（`config/tlmm-client.toml`、`config/tlmm/credentials.key`）；
+服务端 `[llm]` 段自 0.2 起被忽略，只提示不读取。
 
 ## 快速开始（30 分钟）
 

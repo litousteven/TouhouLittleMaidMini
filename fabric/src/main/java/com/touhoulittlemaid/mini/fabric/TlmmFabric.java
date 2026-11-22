@@ -47,12 +47,12 @@ public final class TlmmFabric implements ModInitializer {
         FabricContent.register();
         CompanionCommands.register();
         com.touhoulittlemaid.mini.fabric.network.KnowledgeNetworking.register();
+        // Client brain boundary: payload codecs, receivers and the plan progress tick.
+        com.touhoulittlemaid.mini.fabric.agent.AgentService.register();
         net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents.END_SERVER_TICK.register(
                 com.touhoulittlemaid.mini.fabric.runtime.AgentWatchdog::tick);
         net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents.END_SERVER_TICK.register(
                 ServerDiagnostics::tick);
-        net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents.END_SERVER_TICK.register(
-                com.touhoulittlemaid.mini.fabric.runtime.LlmRuntime::tick);
         // Plans advance once per tick; each step is bounded, so this never blocks the world.
         com.touhoulittlemaid.mini.fabric.plan.PlanRuntime.register();
         ServerLifecycleEvents.SERVER_STARTED.register(server -> {
@@ -63,7 +63,7 @@ public final class TlmmFabric implements ModInitializer {
             com.touhoulittlemaid.mini.fabric.semantic.KnowledgeService.load(
                     com.touhoulittlemaid.mini.fabric.semantic.SemanticService
                             .knowledgeDirectory(FabricLoader.getInstance().getGameDir()));
-            com.touhoulittlemaid.mini.fabric.runtime.LlmRuntime.install(server);
+            com.touhoulittlemaid.mini.fabric.agent.AgentService.install(server);
             TOKEN_STORE.restore(TokenSavedData.get(server).toPersisted());
             EventBus events = new EventBus();
             Path logDirectory = FabricLoader.getInstance().getGameDir().resolve("logs");
@@ -94,9 +94,8 @@ public final class TlmmFabric implements ModInitializer {
                 eventLog = null;
             }
             CompanionConfigs.reset();
-            com.touhoulittlemaid.mini.fabric.config.LlmConfigs.reset();
             com.touhoulittlemaid.mini.fabric.semantic.KnowledgeService.reset();
-            com.touhoulittlemaid.mini.fabric.runtime.LlmRuntime.reset();
+            com.touhoulittlemaid.mini.fabric.agent.AgentService.reset();
             ServerDiagnostics.reset();
             state.set(PlatformState.starting(MOD_VERSION, MINECRAFT_VERSION));
         });

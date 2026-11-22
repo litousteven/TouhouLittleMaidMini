@@ -72,36 +72,6 @@ public final class CompanionCommands {
                                                 .executes(context -> decide(context.getSource(),
                                                         StringArgumentType.getString(context, "id"),
                                                         false)))))
-                        .then(Commands.literal("llm")
-                                .then(Commands.literal("enabled")
-                                        .then(Commands.argument("value", StringArgumentType.word())
-                                                .executes(context -> setLlm(context.getSource(),
-                                                        "enabled",
-                                                        StringArgumentType.getString(context,
-                                                                "value")))))
-                                .then(Commands.literal("base")
-                                        .then(Commands.argument("value",
-                                                        StringArgumentType.greedyString())
-                                                .executes(context -> setLlm(context.getSource(),
-                                                        "base",
-                                                        StringArgumentType.getString(context,
-                                                                "value")))))
-                                .then(Commands.literal("model")
-                                        .then(Commands.argument("value",
-                                                        StringArgumentType.greedyString())
-                                                .executes(context -> setLlm(context.getSource(),
-                                                        "model",
-                                                        StringArgumentType.getString(context,
-                                                                "value")))))
-                                .then(Commands.literal("token")
-                                        .then(Commands.argument("value",
-                                                        StringArgumentType.greedyString())
-                                                .executes(context -> setLlm(context.getSource(),
-                                                        "token",
-                                                        StringArgumentType.getString(context,
-                                                                "value")))))
-                                .then(Commands.literal("status")
-                                        .executes(context -> llmStatus(context.getSource()))))
                         .then(KnowledgeCommands.node())
                         .then(Commands.literal("mcp")
                                 .then(Commands.literal("token")
@@ -336,41 +306,6 @@ public final class CompanionCommands {
         TlmmFabric.persistTokens(source.getServer());
         source.sendSuccess(() -> Component.translatableWithFallback(
                 "command.tlmm.token.revoked", "MCP token revoked"), false);
-        return 1;
-    }
-
-    private static int setLlm(net.minecraft.commands.CommandSourceStack source, String kind,
-            String value) {
-        if (source.getPlayer() != null && !source.getPlayer().permissions().hasPermission(
-                net.minecraft.server.permissions.Permissions.COMMANDS_GAMEMASTER)) {
-            source.sendFailure(Component.literal("Requires operator permission"));
-            return 0;
-        }
-        try {
-            switch (kind) {
-                case "enabled" -> com.touhoulittlemaid.mini.fabric.config.LlmConfigs
-                        .setEnabled("true".equalsIgnoreCase(value));
-                case "base" -> com.touhoulittlemaid.mini.fabric.config.LlmConfigs
-                        .setBaseUrl(value);
-                case "model" -> com.touhoulittlemaid.mini.fabric.config.LlmConfigs
-                        .setModel(value);
-                case "token" -> com.touhoulittlemaid.mini.fabric.config.LlmCredentials
-                        .save(value);
-                default -> throw new IllegalArgumentException("unknown setting");
-            }
-            source.sendSuccess(() -> Component.translatable("gui.tlmm.ai.saved"), false);
-            return 1;
-        } catch (IllegalArgumentException exception) {
-            source.sendFailure(Component.literal("Invalid LLM setting"));
-            return 0;
-        }
-    }
-
-    private static int llmStatus(net.minecraft.commands.CommandSourceStack source) {
-        var config = com.touhoulittlemaid.mini.fabric.config.LlmConfigs.current();
-        boolean token = com.touhoulittlemaid.mini.fabric.config.LlmCredentials.hasToken();
-        source.sendSuccess(() -> Component.literal("LLM enabled=" + config.enabled()
-                + " model=" + config.model() + " token=" + (token ? "set" : "missing")), false);
         return 1;
     }
 

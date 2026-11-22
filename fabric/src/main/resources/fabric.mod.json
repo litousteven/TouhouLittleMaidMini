@@ -28,10 +28,12 @@
       "com.touhoulittlemaid.mini.fabric.gametest.M6BodyGameTests",
       "com.touhoulittlemaid.mini.fabric.gametest.M6ModulesGameTests",
       "com.touhoulittlemaid.mini.fabric.gametest.M6SemanticGameTests",
-      "com.touhoulittlemaid.mini.fabric.gametest.M6KnowledgeGameTests"
+      "com.touhoulittlemaid.mini.fabric.gametest.M6KnowledgeGameTests",
+      "com.touhoulittlemaid.mini.fabric.gametest.M6AgentGameTests"
     ],
     "fabric-client-gametest": [
-      "com.touhoulittlemaid.mini.fabric.gametest.CompanionClientGameTests"
+      "com.touhoulittlemaid.mini.fabric.gametest.CompanionClientGameTests",
+      "com.touhoulittlemaid.mini.fabric.gametest.M6AgentClientGameTests"
     ]
   },
   "depends": {

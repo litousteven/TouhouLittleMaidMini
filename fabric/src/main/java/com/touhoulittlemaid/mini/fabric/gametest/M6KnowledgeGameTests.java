@@ -105,7 +105,14 @@ public final class M6KnowledgeGameTests {
                     + candidate.get().data());
         }
         if (scan.candidates().stream().anyMatch(item -> item.id().equals("minecraft:wheat"))) {
-            throw helper.assertionException("tagged crops must never be asked about");
+            var wheatCandidate = scan.candidates().stream()
+                    .filter(item -> item.id().equals("minecraft:wheat")).findFirst().get();
+            throw helper.assertionException("tagged crops must never be asked about; "
+                    + "resolution=" + SemanticService.resolve(Blocks.WHEAT.defaultBlockState())
+                    + " tags=" + SemanticService.rawTags(
+                            com.touhoulittlemaid.mini.core.semantic.SemanticKind.BLOCK,
+                            "minecraft:wheat")
+                    + " candidate=" + wheatCandidate);
         }
         helper.succeed();
     }

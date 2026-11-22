@@ -1,5 +1,7 @@
 package com.touhoulittlemaid.mini.client.menu;
 
+import com.touhoulittlemaid.mini.client.agent.AgentChatScreen;
+
 import com.touhoulittlemaid.mini.core.LocalBehavior;
 import com.touhoulittlemaid.mini.core.CompanionSchedule;
 import com.touhoulittlemaid.mini.fabric.menu.CompanionMenu;
@@ -73,10 +75,16 @@ public final class CompanionScreen extends AbstractContainerScreen<CompanionMenu
                 Component.translatable("gui.tlmm.mcp.copy_tooltip")));
         Button aiButton = addRenderableWidget(Button.builder(
                         Component.translatable("gui.tlmm.ai.short"),
-                        ignored -> minecraft.gui.setScreen(new LlmConfigScreen()))
+                        ignored -> minecraft.gui.setScreen(new AiSettingsScreen()))
                 .bounds(x + 88, y + 1, 40, 14).build());
         aiButton.setTooltip(net.minecraft.client.gui.components.Tooltip.create(
                 Component.translatable("gui.tlmm.ai.settings")));
+        Button chatButton = addRenderableWidget(Button.builder(
+                        Component.translatable("gui.tlmm.chat.short"),
+                        ignored -> minecraft.gui.setScreen(new AgentChatScreen()))
+                .bounds(x + 44, y + 1, 40, 14).build());
+        chatButton.setTooltip(net.minecraft.client.gui.components.Tooltip.create(
+                Component.translatable("gui.tlmm.chat.title")));
 
         behaviorButton = addRenderableWidget(Button.builder(behaviorLabel(),
                         ignored -> press(CompanionMenu.BUTTON_CYCLE_BEHAVIOR))
