@@ -14,7 +14,7 @@
 | Fabric Loader / API | `0.20.1` / `0.165.2+26.3` |
 | Java | `25`（构建与运行同一 toolchain） |
 | 已发布 | tag `v0.1.0-beta`（被动 MCP） |
-| 工作区 | M6.0–M6.3b 已实现并验证，未打新 tag；M6.4 起未开始 |
+| 工作区 | M6.0–M6.3b 已实现并验证；M6.4 进行中（模型传输层与客户端配置已落地，网络包/AgentLoop/UI 未开始）；未打新 tag |
 | 验证基线 | `:core:test :mcp:test :llm:test` 通过（208 个用例）；`verifyTranslations` 100 键一致；89 个 GameTest 通过 |
 
 `0.1.0-beta` 与本工作区的差别只有一处：M5 增加了确定性基础脑、游戏内模型配置和主动

@@ -344,7 +344,12 @@ M2 结论：**Go**。协议、认证、作用域、审计、幂等、事件、�
   S2C 视图包；`hostile` 必须人工确认，批次可整批回滚，可导出 `#tlmm:` 数据包。
 - 验证：`core 126` / `mcp 79` / `llm 3` 共 208 个用例；89 个 GameTest（连跑三次一致）；
   `verifyTranslations` 100 键一致。
-- 未开始：`M6.4` 客户端脑、`M6.5` 自主模式、`M6.6` 学习闭环、`M6.7` 发布验收。
+- 客户端脑（M6.4，进行中）：`llm` 模块新增 `ModelConfig`、`ChatClient`（OpenAI 兼容、
+  仅对 429/5xx/连接错误重试一次、错误码化）、`ModelConfigStore`（`config/tlmm-client.toml`
+  与 `config/tlmm/credentials.key` 分离）；真实端点联调用例 `LiveModelProbe` 在有
+  `TLMM_MODEL_*` 环境变量时运行，已通过一次（2.1s）。
+- 未完成：`M6.4` 的网络包、`AgentLoop`、Chat/任务 UI，以及删除服务端模型路径；
+  `M6.5` 自主模式、`M6.6` 学习闭环、`M6.7` 发布验收。
 
 ## 恢复工作
 
